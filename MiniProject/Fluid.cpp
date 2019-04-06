@@ -128,7 +128,14 @@ void Fluid::Render(Display& display)
 	{
 		for (int i = 1; i < size - 1; i++)
 		{
-			screen[(int)(i * scale_x + j * scale_y * display.GetBufferWidth())] = vec3(density[INDEX(i, j)]);
+			if (obstacle[INDEX(i, j)])
+			{
+				screen[(int)(i * scale_x + j * scale_y * display.GetBufferWidth())] = vec3(0.6f, 0.1f, 0.1f);
+			}
+			else
+			{
+				screen[(int)(i * scale_x + j * scale_y * display.GetBufferWidth())] = vec3(density[INDEX(i, j)]);
+			}
 		}
 	}
 }
@@ -144,6 +151,8 @@ void Fluid::Diffuse(const Boundary b, float* x, float* x0, const float amount, c
 // To obtain an incompressible field we subtract the gradient field from our current velocities
 void Fluid::Project(float* velocX, float* velocY, float* p, float* div)
 {
+	const float inv_size = 1.0f / size;
+
 	for (int j = 1; j < size - 1; j++) 
 	{
 		for (int i = 1; i < size - 1; i++) 
@@ -151,7 +160,7 @@ void Fluid::Project(float* velocX, float* velocY, float* p, float* div)
 			div[INDEX(i, j)] = -0.5f * (velocX[INDEX(i + 1, j    )] -
 									    velocX[INDEX(i - 1, j    )] +
 									    velocY[INDEX(i,     j + 1)] -
-								        velocY[INDEX(i,     j - 1)]) / size;
+								        velocY[INDEX(i,     j - 1)]) * inv_size;
 			p[INDEX(i, j)] = 0;
 		}
 	}
@@ -176,34 +185,41 @@ void Fluid::Project(float* velocX, float* velocY, float* p, float* div)
 
 void Fluid::Advect(const Boundary b, float* d, float* d0, float* velocX, float* velocY, const float dt)
 {
-	const float dtx = dt * (size - 2);
-	const float dty = dt * (size - 2);
+	const float dt_horizontal = dt * (size - 2);
+	const float dt_vertical   = dt * (size - 2);
 	
-	const float edge = size - 1.5f;
+	const float edge = size + 0.5f;
 
 	for (int j = 1; j < size - 1; j++) 
 	{
 		for (int i = 1; i < size - 1; i++) 
 		{
 			// Move backward according to current velocities
-			float x = i - dtx * velocX[INDEX(i, j)];
-			float y = j - dty * velocY[INDEX(i, j)];
-
+			float x = i - dt_horizontal * velocX[INDEX(i, j)];
+			float y = j - dt_vertical   * velocY[INDEX(i, j)];
+			
+			// Clamp x and y to be valid
 			x = CLAMP(x, 0.5f, edge);
 			y = CLAMP(y, 0.5f, edge);
 
 			// Find nearest corners
 			float i0 = floorf(x);
 			float j0 = floorf(y);
+
+			// Check if the indices are valid
+			// We want to ensure that i0, j0, i1, j1 < 256 
+			// This means we only need to check when i0, j0 >= 255 because i1 = i0 + 1 and j1 = j0 + 1
+			if (i0 >= 255.0f || j0 >= 255.0f) continue;
+
 			float i1 = i0 + 1.0f;
 			float j1 = j0 + 1.0f;
 
-			// Find bilinear factors
+			// Find interpolation factors
 			float s1 = x - i0;
 			float s0 = 1.0f - s1;
 			float t1 = y - j0;
 			float t0 = 1.0f - t1;
-			 
+			
 			// Cast to int for indexing
 			int i0i = i0;
 			int i1i = i1;
@@ -242,13 +258,58 @@ void Fluid::SetBound(const Boundary b, float* x)
 	x[INDEX(0,        size - 1)] = 0.3333333f * (x[INDEX(1,        size - 1)] + x[INDEX(0,        size - 2)] + x[INDEX(0,        size - 1)]);
 	x[INDEX(size - 1, 0       )] = 0.3333333f * (x[INDEX(size - 2, 0       )] + x[INDEX(size - 1, 1       )] + x[INDEX(size - 1, 0       )]);
 	x[INDEX(size - 1, size - 1)] = 0.3333333f * (x[INDEX(size - 2, size - 1)] + x[INDEX(size - 1, size - 2)] + x[INDEX(size - 1, size - 1)]);
+
+	// Handle obstacles in the grid
+	for (int j = 1; j < size - 1; j++)
+	{
+		for (int i = 1; i < size - 1; i++)
+		{
+			const int ij = INDEX(i, j);
+
+			if (obstacle[ij])
+			{
+				switch (b)
+				{
+					case Boundary::VELOCITY_X:
+					{
+						if (!obstacle[INDEX(i - 1, j)])
+						{
+							x[ij] = -x[INDEX(i - 1, j)];
+						}
+						else if (!obstacle[INDEX(i + 1, j)])
+						{
+							x[ij] = -x[INDEX(i + 1, j)];
+						}
+
+						break;
+					}
+
+					case Boundary::VELOCITY_Y:
+					{
+						if (!obstacle[INDEX(i, j - 1)])
+						{
+							x[ij] = -x[INDEX(i, j - 1)];
+						}
+						else if (!obstacle[INDEX(i, j + 1)])
+						{
+							x[ij] = -x[INDEX(i, j + 1)];
+						}
+
+						break;
+					}
+
+					default: break;
+				}
+			}
+		}
+	}
 }
 
 // Gauss-Seidel method to iteratively solve a linear system
 // x is what we are trying to solve for
 void Fluid::GaussSeidel(const Boundary b, float* x, float* x0, const float a, const float c)
 {
-	const float inv_c = 1.0 / c;
+	const float inv_c = 1.0f / c;
 
 	for (int k = 0; k < ITERATIONS; k++)
 	{
