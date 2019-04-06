@@ -29,14 +29,31 @@ Fluid::Fluid(int size, float dt, int diffusion, int viscosity) : size(size), dt(
 	// Allocate grids
 	const int mem_size = size * size;
 
-	density      = (float*)calloc(mem_size, sizeof(float));
-	density_prev = (float*)calloc(mem_size, sizeof(float));
+	density      = new float[mem_size];
+	density_prev = new float[mem_size];
 
-	velocity_x = (float*)calloc(mem_size, sizeof(float));
-	velocity_y = (float*)calloc(mem_size, sizeof(float));
+	velocity_x      = new float[mem_size];
+	velocity_x_prev = new float[mem_size];
 
-	velocity_x_prev = (float*)calloc(mem_size, sizeof(float));
-	velocity_y_prev = (float*)calloc(mem_size, sizeof(float));
+	velocity_y      = new float[mem_size];
+	velocity_y_prev = new float[mem_size];
+
+	obstacle = new bool[mem_size];
+
+	// Initialize all the grids
+	for (int i = 0; i < mem_size; i++)
+	{
+		density[i]      = 0;
+		density_prev[i] = 0;
+
+		velocity_x[i]      = 0;
+		velocity_x_prev[i] = 0;
+
+		velocity_y[i]      = 0;
+		velocity_y_prev[i] = 0;
+
+		obstacle[i] = false;
+	}
 }
 
 Fluid::~Fluid()
@@ -67,19 +84,19 @@ void Fluid::AddVelocity(int x, int y, float amountX, float amountY)
 void Fluid::Step()
 {
 	// Diffuse the velocity field according to viscosity
-	Diffuse(1, velocity_x_prev, velocity_x, visc, dt);
-	Diffuse(2, velocity_y_prev, velocity_y, visc, dt);
+	Diffuse(VELOCITY_X, velocity_x_prev, velocity_x, visc, dt);
+	Diffuse(VELOCITY_Y, velocity_y_prev, velocity_y, visc, dt);
 
 	// Force the velocities to be mass conserving
 	Project(velocity_x_prev, velocity_y_prev, velocity_x, velocity_y);
 
-	Advect(1, velocity_x, velocity_x_prev, velocity_x_prev, velocity_y_prev, dt);
-	Advect(2, velocity_y, velocity_y_prev, velocity_x_prev, velocity_y_prev, dt);
+	Advect(VELOCITY_X, velocity_x, velocity_x_prev, velocity_x_prev, velocity_y_prev, dt);
+	Advect(VELOCITY_Y, velocity_y, velocity_y_prev, velocity_x_prev, velocity_y_prev, dt);
 
 	Project(velocity_x, velocity_y, velocity_x_prev, velocity_y_prev);
 
-	Diffuse(0, density_prev, density, diff, dt);
-	Advect(0, density, density_prev, velocity_x, velocity_y, dt);
+	Diffuse(DIFFUSE, density_prev, density, diff, dt);
+	Advect(DIFFUSE, density, density_prev, velocity_x, velocity_y, dt);
 }
 
 void Fluid::Render(Display& display)
@@ -98,7 +115,7 @@ void Fluid::Render(Display& display)
 	}
 }
 
-void Fluid::Diffuse(const int b, float* x, float* x0, const float amount, const float dt)
+void Fluid::Diffuse(const Boundary b, float* x, float* x0, const float amount, const float dt)
 {
 	const float a = dt * amount * (size - 2) * (size - 2);
 
@@ -121,10 +138,10 @@ void Fluid::Project(float* velocX, float* velocY, float* p, float* div)
 		}
 	}
 
-	SetBound(0, div);
-	SetBound(0, p);
+	SetBound(DIFFUSE, div);
+	SetBound(DIFFUSE, p);
 
-	GaussSeidel(0, p, div, 1, 6);
+	GaussSeidel(DIFFUSE, p, div, 1, 6);
 
 	for (int j = 1; j < size - 1; j++) 
 	{
@@ -135,11 +152,11 @@ void Fluid::Project(float* velocX, float* velocY, float* p, float* div)
 		}
 	}
 
-	SetBound(1, velocX);
-	SetBound(2, velocY);
+	SetBound(VELOCITY_X, velocX);
+	SetBound(VELOCITY_Y, velocY);
 }
 
-void Fluid::Advect(const int b, float* d, float* d0, float* velocX, float* velocY, const float dt)
+void Fluid::Advect(const Boundary b, float* d, float* d0, float* velocX, float* velocY, const float dt)
 {
 	const float dtx = dt * (size - 2);
 	const float dty = dt * (size - 2);
@@ -184,42 +201,38 @@ void Fluid::Advect(const int b, float* d, float* d0, float* velocX, float* veloc
 	SetBound(b, d);
 }
 
-void Fluid::SetBound(const int b, float* x)
+void Fluid::SetBound(const Boundary b, float* x)
 {
 	// Handle top and bottom boundaries
-	for (int k = 1; k < size - 1; k++)
+	for (int i = 1; i < size - 1; i++)
 	{
-		for (int i = 1; i < size - 1; i++)
-		{
-			x[INDEX(i, 0       )] = b == 2 ? -x[INDEX(i, 1       )] : x[INDEX(i, 1       )];
-			x[INDEX(i, size - 1)] = b == 2 ? -x[INDEX(i, size - 2)] : x[INDEX(i, size - 2)];
-		}
+		// Copy if x is not velocity_y or velocity_y prev, otherwise negate
+		x[INDEX(i, 0       )] = b == Boundary::VELOCITY_Y ? -x[INDEX(i, 1       )] : x[INDEX(i, 1       )];
+		x[INDEX(i, size - 1)] = b == Boundary::VELOCITY_Y ? -x[INDEX(i, size - 2)] : x[INDEX(i, size - 2)];
 	}
 
 	// Handle left and right boundaries
-	for (int k = 1; k < size - 1; k++)
+	for (int j = 1; j < size - 1; j++)
 	{
-		for (int j = 1; j < size - 1; j++)
-		{
-			x[INDEX(0,        j)] = b == 1 ? -x[INDEX(1,        j)] : x[INDEX(1,        j)];
-			x[INDEX(size - 1, j)] = b == 1 ? -x[INDEX(size - 2, j)] : x[INDEX(size - 2, j)];
-		}
+		// Copy if x is not velocity_x or velocity_x prev, otherwise negate
+		x[INDEX(0,        j)] = b == Boundary::VELOCITY_X ? -x[INDEX(1,        j)] : x[INDEX(1,        j)];
+		x[INDEX(size - 1, j)] = b == Boundary::VELOCITY_X ? -x[INDEX(size - 2, j)] : x[INDEX(size - 2, j)];
 	}
 
 	// Handle the corners of the boundary
-	x[INDEX(0,        0       )] = 0.3333f * (x[INDEX(1,        0       )] + x[INDEX(0,        1       )] + x[INDEX(0,        0       )]);
-	x[INDEX(0,        size - 1)] = 0.3333f * (x[INDEX(1,        size - 1)] + x[INDEX(0,        size - 2)] + x[INDEX(0,        size - 1)]);
-	x[INDEX(0,        0       )] = 0.3333f * (x[INDEX(1,        0       )] + x[INDEX(0,        1       )] + x[INDEX(0,        0       )]);
-	x[INDEX(0,        size - 1)] = 0.3333f * (x[INDEX(1,        size - 1)] + x[INDEX(0,        size - 2)] + x[INDEX(0,        size - 1)]);
-	x[INDEX(size - 1, 0       )] = 0.3333f * (x[INDEX(size - 2, 0       )] + x[INDEX(size - 1, 1       )] + x[INDEX(size - 1, 0       )]);
-	x[INDEX(size - 1, size - 1)] = 0.3333f * (x[INDEX(size - 2, size - 1)] + x[INDEX(size - 1, size - 2)] + x[INDEX(size - 1, size - 1)]);
-	x[INDEX(size - 1, 0       )] = 0.3333f * (x[INDEX(size - 2, 0       )] + x[INDEX(size - 1, 1       )] + x[INDEX(size - 1, 0       )]);
-	x[INDEX(size - 1, size - 1)] = 0.3333f * (x[INDEX(size - 2, size - 1)] + x[INDEX(size - 1, size - 2)] + x[INDEX(size - 1, size - 1)]);
+	x[INDEX(0,        0       )] = 0.3333333f * (x[INDEX(1,        0       )] + x[INDEX(0,        1       )] + x[INDEX(0,        0       )]);
+	x[INDEX(0,        size - 1)] = 0.3333333f * (x[INDEX(1,        size - 1)] + x[INDEX(0,        size - 2)] + x[INDEX(0,        size - 1)]);
+	x[INDEX(0,        0       )] = 0.3333333f * (x[INDEX(1,        0       )] + x[INDEX(0,        1       )] + x[INDEX(0,        0       )]);
+	x[INDEX(0,        size - 1)] = 0.3333333f * (x[INDEX(1,        size - 1)] + x[INDEX(0,        size - 2)] + x[INDEX(0,        size - 1)]);
+	x[INDEX(size - 1, 0       )] = 0.3333333f * (x[INDEX(size - 2, 0       )] + x[INDEX(size - 1, 1       )] + x[INDEX(size - 1, 0       )]);
+	x[INDEX(size - 1, size - 1)] = 0.3333333f * (x[INDEX(size - 2, size - 1)] + x[INDEX(size - 1, size - 2)] + x[INDEX(size - 1, size - 1)]);
+	x[INDEX(size - 1, 0       )] = 0.3333333f * (x[INDEX(size - 2, 0       )] + x[INDEX(size - 1, 1       )] + x[INDEX(size - 1, 0       )]);
+	x[INDEX(size - 1, size - 1)] = 0.3333333f * (x[INDEX(size - 2, size - 1)] + x[INDEX(size - 1, size - 2)] + x[INDEX(size - 1, size - 1)]);
 }
 
 // Gauss-Seidel method to iteratively solve a linear system
 // x is what we are trying to solve for
-void Fluid::GaussSeidel(const int b, float* x, float* x0, const float a, const float c)
+void Fluid::GaussSeidel(const Boundary b, float* x, float* x0, const float a, const float c)
 {
 	const float inv_c = 1.0 / c;
 

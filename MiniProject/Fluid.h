@@ -1,6 +1,14 @@
 #pragma once
 #include "Display.h"
 
+// Array type used by boundary condition
+enum Boundary
+{
+	DIFFUSE    = 0,
+	VELOCITY_X = 1,
+	VELOCITY_Y = 2
+};
+
 class Fluid
 {
 public:
@@ -18,6 +26,8 @@ public:
 	float* velocity_y;
 	float* velocity_y_prev;
 
+	bool* obstacle;
+
 	Fluid(int size, float dt, int diffusion, int viscosity);
 	~Fluid();
 
@@ -28,10 +38,10 @@ public:
 
 	void Render(Display& display);
 
-	void Diffuse(const int b, float* x, float* x0, const float amount, const float dt);
-	void Advect(const int b, float* d, float* d0, float* velocX, float* velocY, const float dt);
+	void Diffuse(const Boundary b, float* x, float* x0, const float amount, const float dt);
+	void Advect(const Boundary b, float* d, float* d0, float* velocX, float* velocY, const float dt);
 	void Project(float* velocX, float* velocY, float* p, float* div);
-	void SetBound(const int b, float* x);
+	void SetBound(const Boundary b, float* x);
 
-	void GaussSeidel(const int b, float* x, float* x0, const float a, const float c);
+	void GaussSeidel(const Boundary b, float* x, float* x0, const float a, const float c);
 };
