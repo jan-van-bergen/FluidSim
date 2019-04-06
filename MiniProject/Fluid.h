@@ -34,7 +34,10 @@ public:
 	void AddDensity(int x, int y, float amount);
 	void AddVelocity(int x, int y, float amountX, float amountY);
 
-	void Step();
+	void AddObstacle(int x, int y);
+	void RemoveObstacle(int x, int y);
+
+	void Update();
 
 	void Render(Display& display);
 

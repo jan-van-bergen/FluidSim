@@ -81,7 +81,25 @@ void Fluid::AddVelocity(int x, int y, float amountX, float amountY)
 	velocity_y[index] += amountY;
 }
 
-void Fluid::Step()
+void Fluid::AddObstacle(int x, int y)
+{
+	// Ensure that obstacles are never isolated, this is required by the boundary solver
+	obstacle[INDEX(x,     y    )] = true;
+	obstacle[INDEX(x + 1, y    )] = true;
+	obstacle[INDEX(x,     y + 1)] = true;
+	obstacle[INDEX(x + 1, y + 1)] = true;
+}
+
+void Fluid::RemoveObstacle(int x, int y)
+{
+	// Ensure that obstacles are never isolated, this is required by the boundary solver
+	obstacle[INDEX(x,     y    )] = false;
+	obstacle[INDEX(x + 1, y    )] = false;
+	obstacle[INDEX(x,     y + 1)] = false;
+	obstacle[INDEX(x + 1, y + 1)] = false;
+}
+
+void Fluid::Update()
 {
 	// Diffuse the velocity field according to viscosity
 	Diffuse(VELOCITY_X, velocity_x_prev, velocity_x, visc, dt);
@@ -222,10 +240,6 @@ void Fluid::SetBound(const Boundary b, float* x)
 	// Handle the corners of the boundary
 	x[INDEX(0,        0       )] = 0.3333333f * (x[INDEX(1,        0       )] + x[INDEX(0,        1       )] + x[INDEX(0,        0       )]);
 	x[INDEX(0,        size - 1)] = 0.3333333f * (x[INDEX(1,        size - 1)] + x[INDEX(0,        size - 2)] + x[INDEX(0,        size - 1)]);
-	x[INDEX(0,        0       )] = 0.3333333f * (x[INDEX(1,        0       )] + x[INDEX(0,        1       )] + x[INDEX(0,        0       )]);
-	x[INDEX(0,        size - 1)] = 0.3333333f * (x[INDEX(1,        size - 1)] + x[INDEX(0,        size - 2)] + x[INDEX(0,        size - 1)]);
-	x[INDEX(size - 1, 0       )] = 0.3333333f * (x[INDEX(size - 2, 0       )] + x[INDEX(size - 1, 1       )] + x[INDEX(size - 1, 0       )]);
-	x[INDEX(size - 1, size - 1)] = 0.3333333f * (x[INDEX(size - 2, size - 1)] + x[INDEX(size - 1, size - 2)] + x[INDEX(size - 1, size - 1)]);
 	x[INDEX(size - 1, 0       )] = 0.3333333f * (x[INDEX(size - 2, 0       )] + x[INDEX(size - 1, 1       )] + x[INDEX(size - 1, 0       )]);
 	x[INDEX(size - 1, size - 1)] = 0.3333333f * (x[INDEX(size - 2, size - 1)] + x[INDEX(size - 1, size - 2)] + x[INDEX(size - 1, size - 1)]);
 }
@@ -245,9 +259,7 @@ void Fluid::GaussSeidel(const Boundary b, float* x, float* x0, const float a, co
 				x[INDEX(i, j)] = (x0[INDEX(i, j)]+ a * (x[INDEX(i + 1, j    )] +
 												        x[INDEX(i - 1, j    )] +
 												        x[INDEX(i,     j + 1)] +
-												        x[INDEX(i,     j - 1)] +
-												        x[INDEX(i,     j    )] +
-												        x[INDEX(i,     j    )])) * inv_c;
+												        x[INDEX(i,     j - 1)])) * inv_c;
 			}
 		}
 
