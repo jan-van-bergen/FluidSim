@@ -9,14 +9,14 @@ public:
 	const float diff;
 	const float visc;
 
-	float *s;
-	float *density;
+	float* density;
+	float* density_prev;
 
-	float *Vx;
-	float *Vy;
+	float* velocity_x;
+	float* velocity_x_prev;
 
-	float *Vx0;
-	float *Vy0;
+	float* velocity_y;
+	float* velocity_y_prev;
 
 	Fluid(int size, float dt, int diffusion, int viscosity);
 	~Fluid();
@@ -28,9 +28,10 @@ public:
 
 	void Render(Display& display);
 
-	void Diffuse(int b, float *x, float *x0, float diff, float dt, int iter, int N);
-	void Project(float *velocX, float *velocY, float *p, float *div, int iter, int N);
-	void Advect(int b, float *d, float *d0, float *velocX, float *velocY, float dt, int N);
-	void SetBound(int b, float *x, int N);
-	void LinearSolve(int b, float *x, float *x0, float a, float c, int iter, int N);
+	void Diffuse(const int b, float* x, float* x0, const float amount, const float dt);
+	void Advect(const int b, float* d, float* d0, float* velocX, float* velocY, const float dt);
+	void Project(float* velocX, float* velocY, float* p, float* div);
+	void SetBound(const int b, float* x);
+
+	void GaussSeidel(const int b, float* x, float* x0, const float a, const float c);
 };
