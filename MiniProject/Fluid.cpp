@@ -70,12 +70,18 @@ Fluid::~Fluid()
 
 void Fluid::AddDensity(int x, int y, float amount)
 {
-	density[INDEX(x, y)] += amount;
+	const int index = INDEX(x, y);
+
+	if (obstacle[index]) return;
+
+	density[index] += amount;
 }
 
 void Fluid::AddVelocity(int x, int y, float amountX, float amountY)
 {
 	const int index = INDEX(x, y);
+
+	if (obstacle[index]) return;
 
 	velocity_x[index] += amountX;
 	velocity_y[index] += amountY;
@@ -108,6 +114,7 @@ void Fluid::Update()
 	// Force the velocities to be mass conserving
 	Project(velocity_x_prev, velocity_y_prev, velocity_x, velocity_y);
 
+	// Advect behaves more accurately when the velocity field is mass conserving
 	Advect(VELOCITY_X, velocity_x, velocity_x_prev, velocity_x_prev, velocity_y_prev, dt);
 	Advect(VELOCITY_Y, velocity_y, velocity_y_prev, velocity_x_prev, velocity_y_prev, dt);
 
@@ -149,18 +156,18 @@ void Fluid::Diffuse(const Boundary b, float* x, float* x0, const float amount, c
 
 // Every velocity field is the sum of an incompressible field and a gradient field
 // To obtain an incompressible field we subtract the gradient field from our current velocities
-void Fluid::Project(float* velocX, float* velocY, float* p, float* div)
+void Fluid::Project(float* vel_x, float* vel_y, float* p, float* div)
 {
-	const float inv_size = 1.0f / size;
+	const float factor = -0.5f / size;
 
 	for (int j = 1; j < size - 1; j++) 
 	{
 		for (int i = 1; i < size - 1; i++) 
 		{
-			div[INDEX(i, j)] = -0.5f * (velocX[INDEX(i + 1, j    )] -
-									    velocX[INDEX(i - 1, j    )] +
-									    velocY[INDEX(i,     j + 1)] -
-								        velocY[INDEX(i,     j - 1)]) * inv_size;
+			div[INDEX(i, j)] = factor * (vel_x[INDEX(i + 1, j    )] -
+									     vel_x[INDEX(i - 1, j    )] +
+									     vel_y[INDEX(i,     j + 1)] -
+								         vel_y[INDEX(i,     j - 1)]);
 			p[INDEX(i, j)] = 0;
 		}
 	}
@@ -174,13 +181,13 @@ void Fluid::Project(float* velocX, float* velocY, float* p, float* div)
 	{
 		for (int i = 1; i < size - 1; i++) 
 		{
-			velocX[INDEX(i, j)] -= 0.5f * (p[INDEX(i + 1, j    )] - p[INDEX(i - 1, j    )]) * size;
-			velocY[INDEX(i, j)] -= 0.5f * (p[INDEX(i,     j + 1)] - p[INDEX(i,     j - 1)]) * size;
+			vel_x[INDEX(i, j)] -= 0.5f * (p[INDEX(i + 1, j    )] - p[INDEX(i - 1, j    )]) * size;
+			vel_y[INDEX(i, j)] -= 0.5f * (p[INDEX(i,     j + 1)] - p[INDEX(i,     j - 1)]) * size;
 		}
 	}
 
-	SetBound(VELOCITY_X, velocX);
-	SetBound(VELOCITY_Y, velocY);
+	SetBound(VELOCITY_X, vel_x);
+	SetBound(VELOCITY_Y, vel_y);
 }
 
 void Fluid::Advect(const Boundary b, float* d, float* d0, float* velocX, float* velocY, const float dt)
@@ -298,7 +305,12 @@ void Fluid::SetBound(const Boundary b, float* x)
 						break;
 					}
 
-					default: break;
+					case Boundary::DIFFUSE:
+					{
+						//x[ij] = 0;
+
+						break;
+					}
 				}
 			}
 		}
