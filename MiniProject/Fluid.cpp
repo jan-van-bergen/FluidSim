@@ -9,28 +9,27 @@
 // Get the 1d index from two 2d indices
 #define INDEX(x, y) ((x) + (y) * size)
 
-// FOR DEBUG PURPOSES
-// int INDEX(int x, int y)
-// {
-// 	if (x < 0 || x >= 256) throw new std::exception();
-// 	if (y < 0 || y >= 256) throw new std::exception();
-// 
-// 	return x + y * 256;
-// }
-
 // Clamps val between min and max
 #define CLAMP(val, min, max) (val < min ? min : (val > max ? max : val))
 
 using namespace std;
 using namespace glm;
 
-Fluid::Fluid(int size, float dt, int diffusion, int viscosity) : size(size), dt(dt), diff(diffusion), visc(viscosity)
+Fluid::Fluid(int size, float delta_time, float diffusion, float viscosity, float room_temperature) : 
+	size(size), 
+	delta_time(delta_time), 
+	diffusion(diffusion), 
+	viscosity(viscosity), 
+	room_temperature(room_temperature)
 {
 	// Allocate grids
 	const int mem_size = size * size;
 
 	density      = new float[mem_size];
 	density_prev = new float[mem_size];
+
+	temperature      = new float[mem_size];
+	temperature_prev = new float[mem_size];
 
 	velocity_x      = new float[mem_size];
 	velocity_x_prev = new float[mem_size];
@@ -40,11 +39,14 @@ Fluid::Fluid(int size, float dt, int diffusion, int viscosity) : size(size), dt(
 
 	obstacle = new bool[mem_size];
 
-	// Initialize all the grids
+	// Initialize all the fields
 	for (int i = 0; i < mem_size; i++)
 	{
 		density[i]      = 0;
 		density_prev[i] = 0;
+
+		temperature[i]      = room_temperature;
+		temperature_prev[i] = room_temperature;
 
 		velocity_x[i]      = 0;
 		velocity_x_prev[i] = 0;
@@ -87,6 +89,15 @@ void Fluid::AddVelocity(int x, int y, float amountX, float amountY)
 	velocity_y[index] += amountY;
 }
 
+void Fluid::AddTemperature(int x, int y, float amount)
+{
+	const int index = INDEX(x, y);
+
+	if (obstacle[index]) return;
+
+	temperature[index] += amount;
+}
+
 void Fluid::AddObstacle(int x, int y)
 {
 	// Ensure that obstacles are never isolated, this is required by the boundary solver
@@ -108,20 +119,25 @@ void Fluid::RemoveObstacle(int x, int y)
 void Fluid::Update()
 {
 	// Diffuse the velocity field according to viscosity
-	Diffuse(VELOCITY_X, velocity_x_prev, velocity_x, visc, dt);
-	Diffuse(VELOCITY_Y, velocity_y_prev, velocity_y, visc, dt);
+	Diffuse(VELOCITY_X, velocity_x_prev, velocity_x, viscosity);
+	Diffuse(VELOCITY_Y, velocity_y_prev, velocity_y, viscosity);
 
 	// Force the velocities to be mass conserving
 	Project(velocity_x_prev, velocity_y_prev, velocity_x, velocity_y);
 
 	// Advect behaves more accurately when the velocity field is mass conserving
-	Advect(VELOCITY_X, velocity_x, velocity_x_prev, velocity_x_prev, velocity_y_prev, dt);
-	Advect(VELOCITY_Y, velocity_y, velocity_y_prev, velocity_x_prev, velocity_y_prev, dt);
+	Advect(VELOCITY_X, velocity_x, velocity_x_prev, velocity_x_prev, velocity_y_prev);
+	Advect(VELOCITY_Y, velocity_y, velocity_y_prev, velocity_x_prev, velocity_y_prev);
+
+	Buoyancy();
 
 	Project(velocity_x, velocity_y, velocity_x_prev, velocity_y_prev);
 
-	Diffuse(DIFFUSE, density_prev, density, diff, dt);
-	Advect(DIFFUSE, density, density_prev, velocity_x, velocity_y, dt);
+	Diffuse(DIFFUSE, density_prev, density, diffusion);
+	Advect(DIFFUSE, density, density_prev, velocity_x, velocity_y);
+
+	Diffuse(DIFFUSE, temperature_prev, temperature, diffusion);
+	Advect(DIFFUSE, temperature, temperature_prev, velocity_x, velocity_y);
 }
 
 void Fluid::Render(Display& display)
@@ -141,15 +157,17 @@ void Fluid::Render(Display& display)
 			}
 			else
 			{
-				screen[(int)(i * scale_x + j * scale_y * display.GetBufferWidth())] = vec3(density[INDEX(i, j)]);
+				//screen[(int)(i * scale_x + j * scale_y * display.GetBufferWidth())] = vec3(density[INDEX(i, j)]);
+
+				screen[(int)(i * scale_x + j * scale_y * display.GetBufferWidth())] = vec3(temperature[INDEX(i, j)] / 255.0f);
 			}
 		}
 	}
 }
 
-void Fluid::Diffuse(const Boundary b, float* x, float* x0, const float amount, const float dt)
+void Fluid::Diffuse(const Boundary b, float* x, float* x0, const float amount)
 {
-	const float a = dt * amount * (size - 2) * (size - 2);
+	const float a = delta_time * amount * (size - 2) * (size - 2);
 
 	GaussSeidel(b, x, x0, a, 1 + 6 * a);
 }
@@ -190,10 +208,12 @@ void Fluid::Project(float* vel_x, float* vel_y, float* p, float* div)
 	SetBound(VELOCITY_Y, vel_y);
 }
 
-void Fluid::Advect(const Boundary b, float* d, float* d0, float* velocX, float* velocY, const float dt)
+// Semi-Lagrangian advection
+// Advect field d from field d0 according to the x and y velocities in the grid
+void Fluid::Advect(const Boundary b, float* d, float* d0, const float* vel_x, const float* vel_y)
 {
-	const float dt_horizontal = dt * (size - 2);
-	const float dt_vertical   = dt * (size - 2);
+	const float dt_horizontal = delta_time * (size - 2);
+	const float dt_vertical   = delta_time * (size - 2);
 	
 	const float edge = size + 0.5f;
 
@@ -202,8 +222,8 @@ void Fluid::Advect(const Boundary b, float* d, float* d0, float* velocX, float* 
 		for (int i = 1; i < size - 1; i++) 
 		{
 			// Move backward according to current velocities
-			float x = i - dt_horizontal * velocX[INDEX(i, j)];
-			float y = j - dt_vertical   * velocY[INDEX(i, j)];
+			float x = i - dt_horizontal * vel_x[INDEX(i, j)];
+			float y = j - dt_vertical   * vel_y[INDEX(i, j)];
 			
 			// Clamp x and y to be valid
 			x = CLAMP(x, 0.5f, edge);
@@ -223,15 +243,15 @@ void Fluid::Advect(const Boundary b, float* d, float* d0, float* velocX, float* 
 
 			// Find interpolation factors
 			float s1 = x - i0;
-			float s0 = 1.0f - s1;
+			float s0 = 1 - s1;
 			float t1 = y - j0;
-			float t0 = 1.0f - t1;
+			float t0 = 1 - t1;
 			
 			// Cast to int for indexing
-			int i0i = i0;
-			int i1i = i1;
-			int j0i = j0;
-			int j1i = j1;
+			int i0i = (int)i0;
+			int i1i = (int)i1;
+			int j0i = (int)j0;
+			int j1i = (int)j1;
 
 			d[INDEX(i, j)] =
 				s0 * (t0 * d0[INDEX(i0i, j0i)] + t1 * d0[INDEX(i0i, j1i)]) +
@@ -261,10 +281,10 @@ void Fluid::SetBound(const Boundary b, float* x)
 	}
 
 	// Handle the corners of the boundary
-	x[INDEX(0,        0       )] = 0.3333333f * (x[INDEX(1,        0       )] + x[INDEX(0,        1       )] + x[INDEX(0,        0       )]);
-	x[INDEX(0,        size - 1)] = 0.3333333f * (x[INDEX(1,        size - 1)] + x[INDEX(0,        size - 2)] + x[INDEX(0,        size - 1)]);
-	x[INDEX(size - 1, 0       )] = 0.3333333f * (x[INDEX(size - 2, 0       )] + x[INDEX(size - 1, 1       )] + x[INDEX(size - 1, 0       )]);
-	x[INDEX(size - 1, size - 1)] = 0.3333333f * (x[INDEX(size - 2, size - 1)] + x[INDEX(size - 1, size - 2)] + x[INDEX(size - 1, size - 1)]);
+	x[INDEX(0,        0       )] = 0.5f * (x[INDEX(1,        0       )] + x[INDEX(0,        1       )]);
+	x[INDEX(0,        size - 1)] = 0.5f * (x[INDEX(1,        size - 1)] + x[INDEX(0,        size - 2)]);
+	x[INDEX(size - 1, 0       )] = 0.5f * (x[INDEX(size - 2, 0       )] + x[INDEX(size - 1, 1       )]);
+	x[INDEX(size - 1, size - 1)] = 0.5f * (x[INDEX(size - 2, size - 1)] + x[INDEX(size - 1, size - 2)]);
 
 	// Handle obstacles in the grid
 	for (int j = 1; j < size - 1; j++)
@@ -287,6 +307,11 @@ void Fluid::SetBound(const Boundary b, float* x)
 						{
 							x[ij] = -x[INDEX(i + 1, j)];
 						}
+						else
+						{
+							// @TODO: optimize indices
+							x[ij] = 0.5f * (x[INDEX(i - 1, j)] + x[INDEX(i + 1, j)]);
+						}
 
 						break;
 					}
@@ -301,6 +326,11 @@ void Fluid::SetBound(const Boundary b, float* x)
 						{
 							x[ij] = -x[INDEX(i, j + 1)];
 						}
+						else
+						{
+							// @TODO: optimize indices
+							x[ij] = 0.5f * (x[INDEX(i, j - 1)] + x[INDEX(i, j + 1)]);
+						}
 
 						break;
 					}
@@ -313,6 +343,32 @@ void Fluid::SetBound(const Boundary b, float* x)
 					}
 				}
 			}
+		}
+	}
+}
+
+void Fluid::Buoyancy()
+{
+	const float P = 1000;
+	const float m = 0.001f;
+	const float g = 9.81f;
+
+	const float R = 8.314472f;
+
+	const float c = P * m * g / R;
+	const float inv_room_temp = 1.0f / room_temperature;
+	
+	for (int j = 1; j < size - 1; j++)
+	{
+		for (int i = 1; i < size - 1; i++)
+		{
+			const int ij = INDEX(i, j);
+
+			// F_buoyancy = P*m*g/R * (1 / T_0 - 1 / T) * u, where u is the up vector
+			const float buoyancy = c * (inv_room_temp - 1.0f / temperature[ij]);
+
+			// Apply buoyancy force in the up direction
+			velocity_y[ij] -= buoyancy * delta_time;
 		}
 	}
 }
