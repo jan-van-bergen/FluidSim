@@ -14,11 +14,12 @@
 using namespace std;
 using namespace glm;
 
-Fluid::Fluid(int size, float delta_time, float diffusion, float viscosity, float room_temperature) : 
+Fluid::Fluid(int size, float delta_time, float viscosity, float density_diffusion, float temperature_diffusion, float room_temperature) :
 	size(size), 
-	delta_time(delta_time), 
-	diffusion(diffusion), 
 	viscosity(viscosity), 
+	delta_time(delta_time), 
+	density_diffusion(density_diffusion),
+	temperature_diffusion(temperature_diffusion),
 	room_temperature(room_temperature)
 {
 	// Allocate grids
@@ -147,22 +148,25 @@ void Fluid::Update()
 	Diffuse(VELOCITY_X, velocity_x_prev, velocity_x, viscosity);
 	Diffuse(VELOCITY_Y, velocity_y_prev, velocity_y, viscosity);
 
-	// Force the velocities to be mass conserving
+	// Project to incompressible fluid
 	Project(velocity_x_prev, velocity_y_prev, velocity_x, velocity_y);
 
 	// Advect behaves more accurately when the velocity field is mass conserving
 	Advect(VELOCITY_X, velocity_x, velocity_x_prev, velocity_x_prev, velocity_y_prev);
 	Advect(VELOCITY_Y, velocity_y, velocity_y_prev, velocity_x_prev, velocity_y_prev);
 
-	// Apply bouyancy force to velocity
+	// Apply external forces
 	ExternalForces();
 
+	// Project to incompressible fluid
 	Project(velocity_x, velocity_y, velocity_x_prev, velocity_y_prev);
 
-	Diffuse(DIFFUSE, density_prev, density, diffusion);
+	// Diffuse density according to density diffusion
+	Diffuse(DIFFUSE, density_prev, density, density_diffusion);
 	Advect(DIFFUSE, density, density_prev, velocity_x, velocity_y);
 
-	Diffuse(DIFFUSE, temperature_prev, temperature, 0.0001f);
+	// Diffuse temperature according to temperature diffusion
+	Diffuse(DIFFUSE, temperature_prev, temperature, temperature_diffusion);
 	Advect(DIFFUSE, temperature, temperature_prev, velocity_x, velocity_y);
 }
 

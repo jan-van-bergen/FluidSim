@@ -1,5 +1,8 @@
 #include "Display.h"
-#include "iostream"
+
+#include <string>
+#include <cstring>
+#include <iostream>
 
 using namespace glm;
 using namespace std;
@@ -70,6 +73,11 @@ Display::~Display()
 bool Display::IsClosed()
 {
 	return m_isClosed;
+}
+
+void Display::SetTitle(const std::string& title)
+{
+	SDL_SetWindowTitle(m_window, title.c_str());
 }
 
 void Display::Clear()

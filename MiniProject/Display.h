@@ -29,6 +29,8 @@ public:
 
 	bool IsClosed();
 
+	void SetTitle(const std::string& title);
+
 	inline int GetWindowWidth() { return m_window_width; }
 	inline int GetWindowHeight() { return m_window_height; }
 

@@ -16,14 +16,18 @@ enum RenderMode
 	RENDER_DENSITY,
 	RENDER_TEMPERATURE
 };
+const std::string Render_Mode_Names[] = { "Diffuse", "Temperature" };
 
 class Fluid
 {
 public:
 	const int size;
 	const float delta_time;
-	const float diffusion;
+
 	const float viscosity;
+	const float density_diffusion;
+	const float temperature_diffusion;
+
 	const float room_temperature;
 
 	int palette_size;
@@ -43,7 +47,7 @@ public:
 
 	bool* obstacle;
 
-	Fluid(int size, float delta_time, float diffusion, float viscosity, float room_temperature);
+	Fluid(int size, float delta_time, float viscosity, float density_diffusion, float temperature_diffusion, float room_temperature);
 	~Fluid();
 
 	void AddDensity(int x, int y, float amount);
