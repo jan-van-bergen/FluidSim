@@ -155,24 +155,24 @@ void Fluid::Update()
 	Advect(VELOCITY_Y, velocity_y, velocity_y_prev, velocity_x_prev, velocity_y_prev);
 
 	// Apply bouyancy force to velocity
-	Buoyancy();
+	ExternalForces();
 
 	Project(velocity_x, velocity_y, velocity_x_prev, velocity_y_prev);
 
 	Diffuse(DIFFUSE, density_prev, density, diffusion);
 	Advect(DIFFUSE, density, density_prev, velocity_x, velocity_y);
 
-	Diffuse(DIFFUSE, temperature_prev, temperature, 0.00001f);
+	Diffuse(DIFFUSE, temperature_prev, temperature, 0.0001f);
 	Advect(DIFFUSE, temperature, temperature_prev, velocity_x, velocity_y);
 }
 
 // Render the fluid simulation to the display
-void Fluid::Render(Display& display)
+void Fluid::Render(Display& display, RenderMode render_mode)
 {
 	const float scale_x = display.GetBufferWidth()  / (float)size;
 	const float scale_y = display.GetBufferHeight() / (float)size;
 
-	vec3* screen = display.GetBuffer();
+	vec3* screen    = display.GetBuffer();
 	const int width = display.GetBufferWidth();
 
 	for (int j = 1; j < size - 1; j++)
@@ -185,9 +185,24 @@ void Fluid::Render(Display& display)
 			}
 			else
 			{
-				const int temp = CLAMP((int)temperature[INDEX(i, j)], 0, palette_size - 1);
+				switch (render_mode)
+				{
+					case RenderMode::RENDER_DENSITY:
+					{
+						screen[(int)(i * scale_x + j * scale_y * width)] = vec3(density[INDEX(i, j)]);
 
-				screen[(int)(i * scale_x + j * scale_y * width)] = palette[temp];
+						break;
+					}
+
+					case RenderMode::RENDER_TEMPERATURE:
+					{
+						const int temp = CLAMP((int)temperature[INDEX(i, j)], 0, palette_size - 1);
+
+						screen[(int)(i * scale_x + j * scale_y * width)] = palette[temp];
+
+						break;
+					}
+				}
 			}
 		}
 	}
@@ -211,7 +226,7 @@ void Fluid::Project(float* vel_x, float* vel_y, float* p, float* div)
 	{
 		for (int i = 1; i < size - 1; i++) 
 		{
-			// Take divergence
+			// Compute divergence
 			div[INDEX(i, j)] = factor * (vel_x[INDEX(i + 1, j    )] - vel_x[INDEX(i - 1, j    )] +
 									     vel_y[INDEX(i,     j + 1)] - vel_y[INDEX(i,     j - 1)]);
 			// Initialize pressure to zero
@@ -245,7 +260,8 @@ void Fluid::Advect(const Boundary b, float* d, float* d0, const float* vel_x, co
 	const float dt_horizontal = delta_time * (size - 2);
 	const float dt_vertical   = delta_time * (size - 2);
 	
-	const float edge = size + 0.5f;
+	const float edge         = size + 0.5f;
+	const float size_minus_1 = size - 1;
 
 	for (int j = 1; j < size - 1; j++) 
 	{
@@ -260,28 +276,28 @@ void Fluid::Advect(const Boundary b, float* d, float* d0, const float* vel_x, co
 			y = CLAMP(y, 0.5f, edge);
 
 			// Find nearest corners
-			float i0 = floorf(x);
-			float j0 = floorf(y);
+			const float i0 = floorf(x);
+			const float j0 = floorf(y);
 
 			// Check if the indices are valid
-			// We want to ensure that i0, j0, i1, j1 < 256 
+			// We want to ensure that i0, j0, i1, j1 < size - 1
 			// This means we only need to check when i0, j0 >= 255 because i1 = i0 + 1 and j1 = j0 + 1
-			if (i0 >= 255.0f || j0 >= 255.0f) continue;
+			if (i0 >= size_minus_1 || j0 >= size_minus_1) continue;
 
-			float i1 = i0 + 1.0f;
-			float j1 = j0 + 1.0f;
+			const float i1 = i0 + 1.0f;
+			const float j1 = j0 + 1.0f;
 
 			// Find interpolation factors
-			float s1 = x - i0;
-			float s0 = 1 - s1;
-			float t1 = y - j0;
-			float t0 = 1 - t1;
+			const float s1 = x - i0;
+			const float s0 = 1 - s1;
+			const float t1 = y - j0;
+			const float t0 = 1 - t1;
 			
 			// Cast to int for indexing
-			int i0i = (int)i0;
-			int i1i = (int)i1;
-			int j0i = (int)j0;
-			int j1i = (int)j1;
+			const int i0i = (int)i0;
+			const int i1i = (int)i1;
+			const int j0i = (int)j0;
+			const int j1i = (int)j1;
 
 			d[INDEX(i, j)] =
 				s0 * (t0 * d0[INDEX(i0i, j0i)] + t1 * d0[INDEX(i0i, j1i)]) +
@@ -329,18 +345,23 @@ void Fluid::SetBound(const Boundary b, float* x)
 				{
 					case Boundary::VELOCITY_X:
 					{
-						if (!obstacle[INDEX(i - 1, j)])
+						const int index_left  = INDEX(i - 1, j);
+						const int index_right = INDEX(i + 1, j);
+
+						if (!obstacle[index_left])
 						{
-							x[ij] = -x[INDEX(i - 1, j)];
+							// If the cell to the left is free, negate x component of velocity
+							x[ij] = -x[index_left];
 						}
-						else if (!obstacle[INDEX(i + 1, j)])
+						else if (!obstacle[index_right])
 						{
-							x[ij] = -x[INDEX(i + 1, j)];
+							// If the cell to the right is free, negate x component of velocity
+							x[ij] = -x[index_right];
 						}
 						else
 						{
-							// @TODO: optimize indices
-							x[ij] = 0.5f * (x[INDEX(i - 1, j)] + x[INDEX(i + 1, j)]);
+							// Averge of left and right cells
+							x[ij] = 0.5f * (x[index_left] + x[index_right]);
 						}
 
 						break;
@@ -348,26 +369,24 @@ void Fluid::SetBound(const Boundary b, float* x)
 
 					case Boundary::VELOCITY_Y:
 					{
-						if (!obstacle[INDEX(i, j - 1)])
+						const int index_up   = INDEX(i, j - 1);
+						const int index_down = INDEX(i, j + 1);
+
+						if (!obstacle[index_up])
 						{
-							x[ij] = -x[INDEX(i, j - 1)];
+							// If the cell above is free, negate y component of velocity
+							x[ij] = -x[index_up];
 						}
-						else if (!obstacle[INDEX(i, j + 1)])
+						else if (!obstacle[index_down])
 						{
-							x[ij] = -x[INDEX(i, j + 1)];
+							// If the cell below is free, negate y component of velocity
+							x[ij] = -x[index_down];
 						}
 						else
 						{
-							// @TODO: optimize indices
-							x[ij] = 0.5f * (x[INDEX(i, j - 1)] + x[INDEX(i, j + 1)]);
+							// Average of up and down cells
+							x[ij] = 0.5f * (x[index_up] + x[index_down]);
 						}
-
-						break;
-					}
-
-					case Boundary::DIFFUSE:
-					{
-						//x[ij] = 0;
 
 						break;
 					}
@@ -377,15 +396,12 @@ void Fluid::SetBound(const Boundary b, float* x)
 	}
 }
 
-void Fluid::Buoyancy()
+// Resolve external forces
+void Fluid::ExternalForces()
 {
-	const float P = 1000;
-	const float m = 0.001f;
-	const float g = 9.81f;
+	const float kappa =  1.1f; // Gravity and Mass scale factor (downward force)
+	const float sigma = -5.0f; // Temperature scale factor		(upward   force)
 
-	const float R = 8.314472f;
-
-	const float c = P * m * g / R;
 	const float inv_room_temp = 1.0f / room_temperature;
 	
 	for (int j = 1; j < size - 1; j++)
@@ -394,13 +410,15 @@ void Fluid::Buoyancy()
 		{
 			const int ij = INDEX(i, j);
 
-			// F_buoyancy = P*m*g/R * (1 / T_0 - 1 / T) * u, where u is the up vector
-			const float buoyancy = c * (inv_room_temp - 1.0f / temperature[ij]);
+			// external force = gravity + buoyancy
+			const float f_ext = kappa * density[ij] + sigma * (inv_room_temp - 1.0f / temperature[ij]);
 
 			// Apply buoyancy force in the up direction
-			velocity_y[ij] -= buoyancy * delta_time;
+			velocity_y[ij] += f_ext * delta_time;
 		}
 	}
+
+	SetBound(Boundary::VELOCITY_Y, velocity_y);
 }
 
 // Gauss-Seidel method to iteratively solve linear systems

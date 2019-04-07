@@ -10,6 +10,13 @@ enum Boundary
 	VELOCITY_Y = 2
 };
 
+// What field should we draw to the screen
+enum RenderMode
+{
+	RENDER_DENSITY,
+	RENDER_TEMPERATURE
+};
+
 class Fluid
 {
 public:
@@ -46,14 +53,14 @@ public:
 	void RemoveObstacle(int x, int y);
 
 	void Update();
-	void Render(Display& display);
+
+	void Render(Display& display, RenderMode render_mode);
 
 	void Diffuse(const Boundary b, float* x, float* x0, const float amount);
 	void Advect(const Boundary b, float* d, float* d0, const float* vel_x, const float* vel_y);
+	void ExternalForces();
 	void Project(float* vel_x, float* vel_y, float* p, float* div);
 	void SetBound(const Boundary b, float* x);
-
-	void Buoyancy();
 
 	void GaussSeidel(const Boundary b, float* x, float* x0, const float a, const float c);
 };
