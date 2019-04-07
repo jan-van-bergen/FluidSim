@@ -1,10 +1,6 @@
 #include <math.h>
 #include <stdlib.h>
-#include <glm/glm.hpp>
 #include "Fluid.h"
-#define SDL_MAIN_HANDLED
-#include <SDL2/SDL.h>
-
 
 // Number of iterations used by Gauss-Seidel
 #define ITERATIONS 4
@@ -25,8 +21,6 @@ Fluid::Fluid(int size, float delta_time, float diffusion, float viscosity, float
 	viscosity(viscosity), 
 	room_temperature(room_temperature)
 {
-	SDL_SetMainReady();
-
 	// Allocate grids
 	const int mem_size = size * size;
 
@@ -61,6 +55,25 @@ Fluid::Fluid(int size, float delta_time, float diffusion, float viscosity, float
 
 		obstacle[i] = false;
 	}
+
+	// Load palette from file
+	SDL_Surface* palette_bmp = SDL_LoadBMP("../MiniProject/Data/Colour_palette.bmp");
+
+	unsigned char* pixels = (unsigned char*)palette_bmp->pixels;
+
+	palette_size = palette_bmp->w;
+	palette      = new vec3[palette_size];
+
+	for (int i = 0; i < palette_size; i++)
+	{
+		unsigned char b = pixels[i * 3];
+		unsigned char g = pixels[i * 3 + 1];
+		unsigned char r = pixels[i * 3 + 2];
+
+		palette[i] = vec3(r / 255.0f, g / 255.0f, b / 255.0f);
+	}
+
+	SDL_FreeSurface(palette_bmp);
 }
 
 Fluid::~Fluid()
@@ -68,11 +81,16 @@ Fluid::~Fluid()
 	delete[] density;
 	delete[] density_prev;
 
+	delete[] temperature;
+	delete[] temperature_prev;
+
 	delete[] velocity_x;
 	delete[] velocity_x_prev;
 
 	delete[] velocity_y;
 	delete[] velocity_y_prev;
+
+	delete[] palette;
 }
 
 void Fluid::AddDensity(int x, int y, float amount)
@@ -134,6 +152,7 @@ void Fluid::Update()
 	Advect(VELOCITY_X, velocity_x, velocity_x_prev, velocity_x_prev, velocity_y_prev);
 	Advect(VELOCITY_Y, velocity_y, velocity_y_prev, velocity_x_prev, velocity_y_prev);
 
+	// Apply bouyancy force to velocity
 	Buoyancy();
 
 	Project(velocity_x, velocity_y, velocity_x_prev, velocity_y_prev);
@@ -151,6 +170,7 @@ void Fluid::Render(Display& display)
 	const float scale_y = display.GetBufferHeight() / (float)size;
 
 	vec3* screen = display.GetBuffer();
+	const int width = display.GetBufferWidth();
 
 	for (int j = 1; j < size - 1; j++)
 	{
@@ -158,13 +178,15 @@ void Fluid::Render(Display& display)
 		{
 			if (obstacle[INDEX(i, j)])
 			{
-				screen[(int)(i * scale_x + j * scale_y * display.GetBufferWidth())] = vec3(0.6f, 0.1f, 0.1f);
+				screen[(int)(i * scale_x + j * scale_y * width)] = vec3(0.6f, 0.1f, 0.1f);
 			}
 			else
 			{
 				//screen[(int)(i * scale_x + j * scale_y * display.GetBufferWidth())] = vec3(density[INDEX(i, j)]);
 
-				screen[(int)(i * scale_x + j * scale_y * display.GetBufferWidth())] = vec3(temperature[INDEX(i, j)] / 255.0f);
+				const int temp = CLAMP((int)temperature[INDEX(i, j)] * 10, 0, palette_size - 1);
+
+				screen[(int)(i * scale_x + j * scale_y * width)] = palette[temp];
 			}
 		}
 	}
@@ -174,7 +196,7 @@ void Fluid::Diffuse(const Boundary b, float* x, float* x0, const float amount)
 {
 	const float a = delta_time * amount * (size - 2) * (size - 2);
 
-	GaussSeidel(b, x, x0, a, 1 + 6 * a);
+	GaussSeidel(b, x, x0, a, 1 + 4 * a);
 }
 
 // Every velocity field is the sum of an incompressible field and a gradient field
@@ -187,10 +209,9 @@ void Fluid::Project(float* vel_x, float* vel_y, float* p, float* div)
 	{
 		for (int i = 1; i < size - 1; i++) 
 		{
-			div[INDEX(i, j)] = factor * (vel_x[INDEX(i + 1, j    )] -
-									     vel_x[INDEX(i - 1, j    )] +
-									     vel_y[INDEX(i,     j + 1)] -
-								         vel_y[INDEX(i,     j - 1)]);
+			// Take divergence
+			div[INDEX(i, j)] = factor * (vel_x[INDEX(i + 1, j    )] - vel_x[INDEX(i - 1, j    )] +
+									     vel_y[INDEX(i,     j + 1)] - vel_y[INDEX(i,     j - 1)]);
 			p[INDEX(i, j)] = 0;
 		}
 	}
@@ -198,7 +219,7 @@ void Fluid::Project(float* vel_x, float* vel_y, float* p, float* div)
 	SetBound(DIFFUSE, div);
 	SetBound(DIFFUSE, p);
 
-	GaussSeidel(DIFFUSE, p, div, 1, 6);
+	GaussSeidel(DIFFUSE, p, div, 1, 4);
 
 	for (int j = 1; j < size - 1; j++) 
 	{
@@ -378,7 +399,7 @@ void Fluid::Buoyancy()
 	}
 }
 
-// Gauss-Seidel method to iteratively solve a linear system
+// Gauss-Seidel method to iteratively solve linear systems
 // x is what we are trying to solve for
 void Fluid::GaussSeidel(const Boundary b, float* x, float* x0, const float a, const float c)
 {
@@ -390,10 +411,10 @@ void Fluid::GaussSeidel(const Boundary b, float* x, float* x0, const float a, co
 		{
 			for (int i = 1; i < size - 1; i++) 
 			{
-				x[INDEX(i, j)] = (x0[INDEX(i, j)]+ a * (x[INDEX(i + 1, j    )] +
-												        x[INDEX(i - 1, j    )] +
-												        x[INDEX(i,     j + 1)] +
-												        x[INDEX(i,     j - 1)])) * inv_c;
+				x[INDEX(i, j)] = inv_c * (x0[INDEX(i, j)]+ a * (x[INDEX(i + 1, j    )] +
+												                x[INDEX(i - 1, j    )] +
+												                x[INDEX(i,     j + 1)] +
+												                x[INDEX(i,     j - 1)]));
 			}
 		}
 

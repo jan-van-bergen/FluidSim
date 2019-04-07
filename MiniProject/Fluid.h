@@ -1,4 +1,5 @@
 #pragma once
+#include <glm/glm.hpp>
 #include "Display.h"
 
 // Array type used by boundary condition
@@ -17,6 +18,9 @@ public:
 	const float diffusion;
 	const float viscosity;
 	const float room_temperature;
+
+	int palette_size;
+	glm::vec3* palette;
 
 	float* density;
 	float* density_prev;
