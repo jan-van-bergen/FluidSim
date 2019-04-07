@@ -56,7 +56,7 @@ Fluid::Fluid(int size, float delta_time, float diffusion, float viscosity, float
 		obstacle[i] = false;
 	}
 
-	// Load palette from file
+	// Load colour palette from file
 	SDL_Surface* palette_bmp = SDL_LoadBMP("../MiniProject/Data/Colour_palette.bmp");
 
 	unsigned char* pixels = (unsigned char*)palette_bmp->pixels;
@@ -66,6 +66,7 @@ Fluid::Fluid(int size, float delta_time, float diffusion, float viscosity, float
 
 	for (int i = 0; i < palette_size; i++)
 	{
+		// The file is stored in BGR format
 		unsigned char b = pixels[i * 3];
 		unsigned char g = pixels[i * 3 + 1];
 		unsigned char r = pixels[i * 3 + 2];
@@ -123,7 +124,7 @@ void Fluid::AddTemperature(int x, int y, float amount)
 
 void Fluid::AddObstacle(int x, int y)
 {
-	// Ensure that obstacles are never isolated, this is required by the boundary solver
+	// Ensure that obstacles are never isolated as this is an assumption made by the boundary solver
 	obstacle[INDEX(x,     y    )] = true;
 	obstacle[INDEX(x + 1, y    )] = true;
 	obstacle[INDEX(x,     y + 1)] = true;
@@ -132,13 +133,14 @@ void Fluid::AddObstacle(int x, int y)
 
 void Fluid::RemoveObstacle(int x, int y)
 {
-	// Ensure that obstacles are never isolated, this is required by the boundary solver
+	// Ensure that obstacles are never isolated as this is an assumption made by the boundary solver
 	obstacle[INDEX(x,     y    )] = false;
 	obstacle[INDEX(x + 1, y    )] = false;
 	obstacle[INDEX(x,     y + 1)] = false;
 	obstacle[INDEX(x + 1, y + 1)] = false;
 }
 
+// Update the fluid simulation a single time step
 void Fluid::Update()
 {
 	// Diffuse the velocity field according to viscosity
@@ -160,10 +162,11 @@ void Fluid::Update()
 	Diffuse(DIFFUSE, density_prev, density, diffusion);
 	Advect(DIFFUSE, density, density_prev, velocity_x, velocity_y);
 
-	Diffuse(DIFFUSE, temperature_prev, temperature, diffusion);
+	Diffuse(DIFFUSE, temperature_prev, temperature, 0.00001f);
 	Advect(DIFFUSE, temperature, temperature_prev, velocity_x, velocity_y);
 }
 
+// Render the fluid simulation to the display
 void Fluid::Render(Display& display)
 {
 	const float scale_x = display.GetBufferWidth()  / (float)size;
@@ -178,13 +181,11 @@ void Fluid::Render(Display& display)
 		{
 			if (obstacle[INDEX(i, j)])
 			{
-				screen[(int)(i * scale_x + j * scale_y * width)] = vec3(0.6f, 0.1f, 0.1f);
+				screen[(int)(i * scale_x + j * scale_y * width)] = vec3(0.6f, 0.2f, 0.2f);
 			}
 			else
 			{
-				//screen[(int)(i * scale_x + j * scale_y * display.GetBufferWidth())] = vec3(density[INDEX(i, j)]);
-
-				const int temp = CLAMP((int)temperature[INDEX(i, j)] * 10, 0, palette_size - 1);
+				const int temp = CLAMP((int)temperature[INDEX(i, j)], 0, palette_size - 1);
 
 				screen[(int)(i * scale_x + j * scale_y * width)] = palette[temp];
 			}
@@ -201,6 +202,7 @@ void Fluid::Diffuse(const Boundary b, float* x, float* x0, const float amount)
 
 // Every velocity field is the sum of an incompressible field and a gradient field
 // To obtain an incompressible field we subtract the gradient field from our current velocities
+// Stores pressure in p and divergence in div
 void Fluid::Project(float* vel_x, float* vel_y, float* p, float* div)
 {
 	const float factor = -0.5f / size;
@@ -212,6 +214,7 @@ void Fluid::Project(float* vel_x, float* vel_y, float* p, float* div)
 			// Take divergence
 			div[INDEX(i, j)] = factor * (vel_x[INDEX(i + 1, j    )] - vel_x[INDEX(i - 1, j    )] +
 									     vel_y[INDEX(i,     j + 1)] - vel_y[INDEX(i,     j - 1)]);
+			// Initialize pressure to zero
 			p[INDEX(i, j)] = 0;
 		}
 	}
@@ -219,6 +222,7 @@ void Fluid::Project(float* vel_x, float* vel_y, float* p, float* div)
 	SetBound(DIFFUSE, div);
 	SetBound(DIFFUSE, p);
 
+	// Solve for pressure
 	GaussSeidel(DIFFUSE, p, div, 1, 4);
 
 	for (int j = 1; j < size - 1; j++) 
