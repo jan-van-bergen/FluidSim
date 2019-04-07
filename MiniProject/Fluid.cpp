@@ -2,6 +2,9 @@
 #include <stdlib.h>
 #include <glm/glm.hpp>
 #include "Fluid.h"
+#define SDL_MAIN_HANDLED
+#include <SDL2/SDL.h>
+
 
 // Number of iterations used by Gauss-Seidel
 #define ITERATIONS 4
@@ -26,6 +29,8 @@ using namespace glm;
 
 Fluid::Fluid(int size, float dt, int diffusion, int viscosity) : size(size), dt(dt), diff(diffusion), visc(viscosity)
 {
+	SDL_SetMainReady();
+
 	// Allocate grids
 	const int mem_size = size * size;
 
