@@ -45,7 +45,7 @@ Fluid::Fluid(int size, float delta_time, float viscosity, float density_diffusio
 	Reset();
 
 	// Load colour palette from file
-	SDL_Surface* palette_bmp = SDL_LoadBMP("../MiniProject/Data/Colour_palette.bmp");
+	SDL_Surface* palette_bmp = SDL_LoadBMP("../MiniProject/Data/Heat_palette.bmp");
 
 	unsigned char* pixels = (unsigned char*)palette_bmp->pixels;
 
@@ -176,7 +176,7 @@ void Fluid::Render(Display& display, RenderMode render_mode)
 		{
 			if (obstacle[INDEX(i, j)])
 			{
-				screen[(int)(i * scale_x + j * scale_y * width)] = vec3(0.6f, 0.2f, 0.2f);
+				//screen[(int)(i * scale_x + j * scale_y * width)] = vec3(0.6f, 0.2f, 0.2f);
 			}
 			else
 			{
@@ -214,16 +214,16 @@ void Fluid::Reset()
 {
 	for (int i = 0; i < size * size; i++)
 	{
-		density[i] = 0;
+		density[i]      = 0;
 		density_copy[i] = 0;
 
-		temperature[i] = room_temperature;
+		temperature[i]      = room_temperature;
 		temperature_copy[i] = room_temperature;
 
-		velocity_x[i] = 0;
+		velocity_x[i]      = 0;
 		velocity_x_copy[i] = 0;
 
-		velocity_y[i] = 0;
+		velocity_y[i]      = 0;
 		velocity_y_copy[i] = 0;
 
 		obstacle[i] = false;
@@ -332,20 +332,16 @@ void Fluid::Advect(const Boundary b, float* d, float* d0, const float* vel_x, co
 
 void Fluid::SetBound(const Boundary b, float* x)
 {
-	// Handle top and bottom boundaries
+	// Handle edge of screen boundaries
 	for (int i = 1; i < size - 1; i++)
 	{
 		// Copy if x is not velocity_y or velocity_y prev, otherwise negate
 		x[INDEX(i, 0       )] = b == Boundary::VELOCITY_Y ? -x[INDEX(i, 1       )] : x[INDEX(i, 1       )];
 		x[INDEX(i, size - 1)] = b == Boundary::VELOCITY_Y ? -x[INDEX(i, size - 2)] : x[INDEX(i, size - 2)];
-	}
 
-	// Handle left and right boundaries
-	for (int j = 1; j < size - 1; j++)
-	{
 		// Copy if x is not velocity_x or velocity_x prev, otherwise negate
-		x[INDEX(0,        j)] = b == Boundary::VELOCITY_X ? -x[INDEX(1,        j)] : x[INDEX(1,        j)];
-		x[INDEX(size - 1, j)] = b == Boundary::VELOCITY_X ? -x[INDEX(size - 2, j)] : x[INDEX(size - 2, j)];
+		x[INDEX(0,        i)] = b == Boundary::VELOCITY_X ? -x[INDEX(1,        i)] : x[INDEX(1,        i)];
+		x[INDEX(size - 1, i)] = b == Boundary::VELOCITY_X ? -x[INDEX(size - 2, i)] : x[INDEX(size - 2, i)];
 	}
 
 	// Handle the corners of the boundary
@@ -409,13 +405,6 @@ void Fluid::SetBound(const Boundary b, float* x)
 							// Average of up and down cells
 							x[ij] = 0.5f * (x[index_up] + x[index_down]);
 						}
-
-						break;
-					}
-
-					case Boundary::DIFFUSE:
-					{
-						//x[ij] = 0;
 
 						break;
 					}

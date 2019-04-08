@@ -17,7 +17,7 @@ enum RenderMode
 	RENDER_TEMPERATURE,
 	RENDER_VELOCITY
 };
-const std::string Render_Mode_Names[] = { "Diffuse", "Temperature", "Velocity" };
+const std::string Render_Mode_Names[] = { "Density", "Temperature", "Velocity" };
 
 class Fluid
 {
