@@ -14,9 +14,10 @@ enum Boundary
 enum RenderMode
 {
 	RENDER_DENSITY,
-	RENDER_TEMPERATURE
+	RENDER_TEMPERATURE,
+	RENDER_VELOCITY
 };
-const std::string Render_Mode_Names[] = { "Diffuse", "Temperature" };
+const std::string Render_Mode_Names[] = { "Diffuse", "Temperature", "Velocity" };
 
 class Fluid
 {
@@ -34,16 +35,16 @@ public:
 	glm::vec3* palette;
 
 	float* density;
-	float* density_prev;
+	float* density_copy;
 
 	float* temperature;
-	float* temperature_prev;
+	float* temperature_copy;
 
 	float* velocity_x;
-	float* velocity_x_prev;
+	float* velocity_x_copy;
 
 	float* velocity_y;
-	float* velocity_y_prev;
+	float* velocity_y_copy;
 
 	bool* obstacle;
 
@@ -60,11 +61,13 @@ public:
 
 	void Render(Display& display, RenderMode render_mode);
 
-	void Diffuse(const Boundary b, float* x, float* x0, const float amount);
+	void Reset();
+
+	void Diffuse(const Boundary b, float* x, const float* x0, const float amount);
 	void Advect(const Boundary b, float* d, float* d0, const float* vel_x, const float* vel_y);
 	void ExternalForces();
 	void Project(float* vel_x, float* vel_y, float* p, float* div);
 	void SetBound(const Boundary b, float* x);
 
-	void GaussSeidel(const Boundary b, float* x, float* x0, const float a, const float c);
+	void GaussSeidel(const Boundary b, float* x, const float* x0, const float a, const float c);
 };

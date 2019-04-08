@@ -4,6 +4,8 @@
 
 // Number of iterations used by Gauss-Seidel
 #define ITERATIONS 4
+// Wall Thickness. Should always be >= 2 as this is an assumption made by the boundary solver
+#define WALL_THICKNESS 4
 
 // Get the 1d index from two 2d indices
 #define INDEX(x, y) ((x) + (y) * size)
@@ -26,36 +28,21 @@ Fluid::Fluid(int size, float delta_time, float viscosity, float density_diffusio
 	const int mem_size = size * size;
 
 	density      = new float[mem_size];
-	density_prev = new float[mem_size];
+	density_copy = new float[mem_size];
 
 	temperature      = new float[mem_size];
-	temperature_prev = new float[mem_size];
+	temperature_copy = new float[mem_size];
 
 	velocity_x      = new float[mem_size];
-	velocity_x_prev = new float[mem_size];
+	velocity_x_copy = new float[mem_size];
 
 	velocity_y      = new float[mem_size];
-	velocity_y_prev = new float[mem_size];
+	velocity_y_copy = new float[mem_size];
 
 	obstacle = new bool[mem_size];
 
 	// Initialize all the fields
-	for (int i = 0; i < mem_size; i++)
-	{
-		density[i]      = 0;
-		density_prev[i] = 0;
-
-		temperature[i]      = room_temperature;
-		temperature_prev[i] = room_temperature;
-
-		velocity_x[i]      = 0;
-		velocity_x_prev[i] = 0;
-
-		velocity_y[i]      = 0;
-		velocity_y_prev[i] = 0;
-
-		obstacle[i] = false;
-	}
+	Reset();
 
 	// Load colour palette from file
 	SDL_Surface* palette_bmp = SDL_LoadBMP("../MiniProject/Data/Colour_palette.bmp");
@@ -81,16 +68,16 @@ Fluid::Fluid(int size, float delta_time, float viscosity, float density_diffusio
 Fluid::~Fluid()
 {
 	delete[] density;
-	delete[] density_prev;
+	delete[] density_copy;
 
 	delete[] temperature;
-	delete[] temperature_prev;
+	delete[] temperature_copy;
 
 	delete[] velocity_x;
-	delete[] velocity_x_prev;
+	delete[] velocity_x_copy;
 
 	delete[] velocity_y;
-	delete[] velocity_y_prev;
+	delete[] velocity_y_copy;
 
 	delete[] palette;
 }
@@ -125,49 +112,53 @@ void Fluid::AddTemperature(int x, int y, float amount)
 
 void Fluid::AddObstacle(int x, int y)
 {
-	// Ensure that obstacles are never isolated as this is an assumption made by the boundary solver
-	obstacle[INDEX(x,     y    )] = true;
-	obstacle[INDEX(x + 1, y    )] = true;
-	obstacle[INDEX(x,     y + 1)] = true;
-	obstacle[INDEX(x + 1, y + 1)] = true;
+	for (int j = y; j < y + WALL_THICKNESS; j++)
+	{
+		for (int i = x; i < x + WALL_THICKNESS; i++)
+		{
+			obstacle[INDEX(i, j)] = true;
+		}
+	}
 }
 
 void Fluid::RemoveObstacle(int x, int y)
 {
-	// Ensure that obstacles are never isolated as this is an assumption made by the boundary solver
-	obstacle[INDEX(x,     y    )] = false;
-	obstacle[INDEX(x + 1, y    )] = false;
-	obstacle[INDEX(x,     y + 1)] = false;
-	obstacle[INDEX(x + 1, y + 1)] = false;
+	for (int j = y; j < y + WALL_THICKNESS; j++)
+	{
+		for (int i = x; i < x + WALL_THICKNESS; i++)
+		{
+			obstacle[INDEX(i, j)] = false;
+		}
+	}
 }
 
 // Update the fluid simulation a single time step
 void Fluid::Update()
 {
 	// Diffuse the velocity field according to viscosity
-	Diffuse(VELOCITY_X, velocity_x_prev, velocity_x, viscosity);
-	Diffuse(VELOCITY_Y, velocity_y_prev, velocity_y, viscosity);
+	Diffuse(VELOCITY_X, velocity_x_copy, velocity_x, viscosity);
+	Diffuse(VELOCITY_Y, velocity_y_copy, velocity_y, viscosity);
 
 	// Project to incompressible fluid
-	Project(velocity_x_prev, velocity_y_prev, velocity_x, velocity_y);
+	Project(velocity_x_copy, velocity_y_copy, velocity_x, velocity_y);
 
 	// Advect behaves more accurately when the velocity field is mass conserving
-	Advect(VELOCITY_X, velocity_x, velocity_x_prev, velocity_x_prev, velocity_y_prev);
-	Advect(VELOCITY_Y, velocity_y, velocity_y_prev, velocity_x_prev, velocity_y_prev);
+	Advect(VELOCITY_X, velocity_x, velocity_x_copy, velocity_x_copy, velocity_y_copy);
+	Advect(VELOCITY_Y, velocity_y, velocity_y_copy, velocity_x_copy, velocity_y_copy);
 
 	// Apply external forces
 	ExternalForces();
 
 	// Project to incompressible fluid
-	Project(velocity_x, velocity_y, velocity_x_prev, velocity_y_prev);
+	Project(velocity_x, velocity_y, velocity_x_copy, velocity_y_copy);
 
 	// Diffuse density according to density diffusion
-	Diffuse(DIFFUSE, density_prev, density, density_diffusion);
-	Advect(DIFFUSE, density, density_prev, velocity_x, velocity_y);
+	Diffuse(DIFFUSE, density_copy, density, density_diffusion);
+	Advect(DIFFUSE, density, density_copy, velocity_x, velocity_y);
 
 	// Diffuse temperature according to temperature diffusion
-	Diffuse(DIFFUSE, temperature_prev, temperature, temperature_diffusion);
-	Advect(DIFFUSE, temperature, temperature_prev, velocity_x, velocity_y);
+	Diffuse(DIFFUSE, temperature_copy, temperature, temperature_diffusion);
+	Advect(DIFFUSE, temperature, temperature_copy, velocity_x, velocity_y);
 }
 
 // Render the fluid simulation to the display
@@ -179,9 +170,9 @@ void Fluid::Render(Display& display, RenderMode render_mode)
 	vec3* screen    = display.GetBuffer();
 	const int width = display.GetBufferWidth();
 
-	for (int j = 1; j < size - 1; j++)
+	for (int j = 0; j < size; j++)
 	{
-		for (int i = 1; i < size - 1; i++)
+		for (int i = 0; i < size; i++)
 		{
 			if (obstacle[INDEX(i, j)])
 			{
@@ -206,13 +197,40 @@ void Fluid::Render(Display& display, RenderMode render_mode)
 
 						break;
 					}
+
+					case RenderMode::RENDER_VELOCITY:
+					{
+						screen[(int)(i * scale_x + j * scale_y * width)] = vec3(velocity_x[INDEX(i, j)] + 0.5f, velocity_y[INDEX(i, j)] + 0.5f, 0);
+
+						break;
+					}
 				}
 			}
 		}
 	}
 }
 
-void Fluid::Diffuse(const Boundary b, float* x, float* x0, const float amount)
+void Fluid::Reset()
+{
+	for (int i = 0; i < size * size; i++)
+	{
+		density[i] = 0;
+		density_copy[i] = 0;
+
+		temperature[i] = room_temperature;
+		temperature_copy[i] = room_temperature;
+
+		velocity_x[i] = 0;
+		velocity_x_copy[i] = 0;
+
+		velocity_y[i] = 0;
+		velocity_y_copy[i] = 0;
+
+		obstacle[i] = false;
+	}
+}
+
+void Fluid::Diffuse(const Boundary b, float* x, const float* x0, const float amount)
 {
 	const float a = delta_time * amount * (size - 2) * (size - 2);
 
@@ -394,6 +412,13 @@ void Fluid::SetBound(const Boundary b, float* x)
 
 						break;
 					}
+
+					case Boundary::DIFFUSE:
+					{
+						//x[ij] = 0;
+
+						break;
+					}
 				}
 			}
 		}
@@ -427,7 +452,7 @@ void Fluid::ExternalForces()
 
 // Gauss-Seidel method to iteratively solve linear systems
 // x is what we are trying to solve for
-void Fluid::GaussSeidel(const Boundary b, float* x, float* x0, const float a, const float c)
+void Fluid::GaussSeidel(const Boundary b, float* x, const float* x0, const float a, const float c)
 {
 	const float inv_c = 1.0f / c;
 
@@ -437,10 +462,10 @@ void Fluid::GaussSeidel(const Boundary b, float* x, float* x0, const float a, co
 		{
 			for (int i = 1; i < size - 1; i++) 
 			{
-				x[INDEX(i, j)] = inv_c * (x0[INDEX(i, j)]+ a * (x[INDEX(i + 1, j    )] +
-												                x[INDEX(i - 1, j    )] +
-												                x[INDEX(i,     j + 1)] +
-												                x[INDEX(i,     j - 1)]));
+				x[INDEX(i, j)] = inv_c * (x0[INDEX(i, j)] + a * (x[INDEX(i + 1, j    )] +
+												                 x[INDEX(i - 1, j    )] +
+												                 x[INDEX(i,     j + 1)] +
+												                 x[INDEX(i,     j - 1)]));
 			}
 		}
 
