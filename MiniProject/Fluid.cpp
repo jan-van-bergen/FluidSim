@@ -205,7 +205,10 @@ void Fluid::Render(Display& display, RenderMode render_mode)
 
 					case RenderMode::RENDER_VELOCITY:
 					{
-						screen[(int)(i * scale_x + j * scale_y * width)] = vec3(velocity_x[INDEX(i, j)] + 0.5f, velocity_y[INDEX(i, j)] + 0.5f, 0);
+						screen[(int)(i * scale_x + j * scale_y * width)] = vec3(
+							velocity_x[INDEX(i, j)] + 0.5f, 
+							velocity_y[INDEX(i, j)] + 0.5f, 
+							0.5f);
 
 						break;
 					}
@@ -351,7 +354,7 @@ void Fluid::VorticityConfinement(float* vel_x, float* vel_y, float* curl)
 
 			const int ij = INDEX(i, j);		
 			vel_x[ij] += delta_time * curl[ij] * vorticity_confinement_eta * inv_length * dx;
-			vel_x[ij] += delta_time * curl[ij] * vorticity_confinement_eta * inv_length * dy;
+			vel_y[ij] += delta_time * curl[ij] * vorticity_confinement_eta * inv_length * dy;
 		}
 	}
 }
