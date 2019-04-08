@@ -70,7 +70,7 @@ public:
 	void ExternalForces(float* vel_x, float* vel_y);
 	void VorticityConfinement(float* vel_x, float* vel_y, float* curl);
 	void Project(float* vel_x, float* vel_y, float* p, float* div);
-	void SetBound(const Boundary b, float* x);
+	void BoundaryConditions(const Boundary b, float* x);
 
 	void GaussSeidel(const Boundary b, float* x, const float* x0, const float a, const float c);
 };

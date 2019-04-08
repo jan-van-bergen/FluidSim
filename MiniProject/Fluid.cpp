@@ -68,6 +68,7 @@ Fluid::Fluid(int size, float delta_time, float viscosity, float density_diffusio
 
 Fluid::~Fluid()
 {
+	// Free memory
 	delete[] density;
 	delete[] density_copy;
 
@@ -180,7 +181,7 @@ void Fluid::Render(Display& display, RenderMode render_mode)
 		{
 			if (obstacle[INDEX(i, j)])
 			{
-				screen[(int)(i * scale_x + j * scale_y * width)] = vec3(0.6f, 0.2f, 0.2f);
+				screen[(int)(i * scale_x + j * scale_y * width)] = vec3(0.5f, 0.1f, 0.1f);
 			}
 			else
 			{
@@ -188,7 +189,7 @@ void Fluid::Render(Display& display, RenderMode render_mode)
 				{
 					case RenderMode::RENDER_DENSITY:
 					{
-						screen[(int)(i * scale_x + j * scale_y * width)] = vec3(density[INDEX(i, j)]);
+						screen[(int)(i * scale_x + j * scale_y * width)] = vec3(density[INDEX(i, j)] * 2.5f);
 
 						break;
 					}
@@ -239,45 +240,6 @@ void Fluid::Diffuse(const Boundary b, float* x, const float* x0, const float amo
 	const float a = delta_time * amount * (size - 2) * (size - 2);
 
 	GaussSeidel(b, x, x0, a, 1 + 4 * a);
-}
-
-// Every velocity field is the sum of an incompressible field and a gradient field
-// To obtain an incompressible field we subtract the gradient field from our current velocities
-// Stores pressure in p and divergence in div
-void Fluid::Project(float* vel_x, float* vel_y, float* p, float* div)
-{
-	const float factor = -0.5f / size;
-
-	for (int j = 1; j < size - 1; j++) 
-	{
-		for (int i = 1; i < size - 1; i++) 
-		{
-			// Compute divergence
-			div[INDEX(i, j)] = factor * (vel_x[INDEX(i + 1, j    )] - vel_x[INDEX(i - 1, j    )] +
-									     vel_y[INDEX(i,     j + 1)] - vel_y[INDEX(i,     j - 1)]);
-			// Initialize pressure to zero
-			p[INDEX(i, j)] = 0;
-		}
-	}
-
-	SetBound(DIFFUSE, div);
-	SetBound(DIFFUSE, p);
-
-	// Solve pressure from divergence
-	GaussSeidel(DIFFUSE, p, div, 1, 4);
-
-	for (int j = 1; j < size - 1; j++) 
-	{
-		for (int i = 1; i < size - 1; i++) 
-		{
-			// Subtract pressure gradient to make x and y velocities incompressible again
-			vel_x[INDEX(i, j)] -= 0.5f * (p[INDEX(i + 1, j    )] - p[INDEX(i - 1, j    )]) * size;
-			vel_y[INDEX(i, j)] -= 0.5f * (p[INDEX(i,     j + 1)] - p[INDEX(i,     j - 1)]) * size;
-		}
-	}
-
-	SetBound(VELOCITY_X, vel_x);
-	SetBound(VELOCITY_Y, vel_y);
 }
 
 // Semi-Lagrangian advection
@@ -332,91 +294,7 @@ void Fluid::Advect(const Boundary b, float* d, float* d0, const float* vel_x, co
 		}
 	}
 
-	SetBound(b, d);
-}
-
-void Fluid::SetBound(const Boundary b, float* x)
-{
-	// Handle edge of screen boundaries
-	for (int i = 1; i < size - 1; i++)
-	{
-		// Copy if x is not velocity_y or velocity_y prev, otherwise negate
-		x[INDEX(i, 0       )] = b == Boundary::VELOCITY_Y ? -x[INDEX(i, 1       )] : x[INDEX(i, 1       )];
-		x[INDEX(i, size - 1)] = b == Boundary::VELOCITY_Y ? -x[INDEX(i, size - 2)] : x[INDEX(i, size - 2)];
-
-		// Copy if x is not velocity_x or velocity_x prev, otherwise negate
-		x[INDEX(0,        i)] = b == Boundary::VELOCITY_X ? -x[INDEX(1,        i)] : x[INDEX(1,        i)];
-		x[INDEX(size - 1, i)] = b == Boundary::VELOCITY_X ? -x[INDEX(size - 2, i)] : x[INDEX(size - 2, i)];
-	}
-
-	// Handle the corners of the boundary
-	x[INDEX(0,        0       )] = 0.5f * (x[INDEX(1,        0       )] + x[INDEX(0,        1       )]);
-	x[INDEX(0,        size - 1)] = 0.5f * (x[INDEX(1,        size - 1)] + x[INDEX(0,        size - 2)]);
-	x[INDEX(size - 1, 0       )] = 0.5f * (x[INDEX(size - 2, 0       )] + x[INDEX(size - 1, 1       )]);
-	x[INDEX(size - 1, size - 1)] = 0.5f * (x[INDEX(size - 2, size - 1)] + x[INDEX(size - 1, size - 2)]);
-
-	// Handle obstacles in the grid
-	for (int j = 1; j < size - 1; j++)
-	{
-		for (int i = 1; i < size - 1; i++)
-		{
-			const int ij = INDEX(i, j);
-
-			if (obstacle[ij])
-			{
-				switch (b)
-				{
-					case Boundary::VELOCITY_X:
-					{
-						const int index_left  = INDEX(i - 1, j);
-						const int index_right = INDEX(i + 1, j);
-
-						if (!obstacle[index_left])
-						{
-							// If the cell to the left is free, negate x component of velocity
-							x[ij] = -x[index_left];
-						}
-						else if (!obstacle[index_right])
-						{
-							// If the cell to the right is free, negate x component of velocity
-							x[ij] = -x[index_right];
-						}
-						else
-						{
-							// Averge of left and right cells
-							x[ij] = 0.5f * (x[index_left] + x[index_right]);
-						}
-
-						break;
-					}
-
-					case Boundary::VELOCITY_Y:
-					{
-						const int index_up   = INDEX(i, j - 1);
-						const int index_down = INDEX(i, j + 1);
-
-						if (!obstacle[index_up])
-						{
-							// If the cell above is free, negate y component of velocity
-							x[ij] = -x[index_up];
-						}
-						else if (!obstacle[index_down])
-						{
-							// If the cell below is free, negate y component of velocity
-							x[ij] = -x[index_down];
-						}
-						else
-						{
-							// Average of up and down cells
-							x[ij] = 0.5f * (x[index_up] + x[index_down]);
-						}
-
-						break;
-					}
-				}
-			}
-		}
-	}
+	BoundaryConditions(b, d);
 }
 
 // Resolve external forces
@@ -441,23 +319,25 @@ void Fluid::ExternalForces(float* vel_x, float* vel_y)
 		}
 	}
 
-	SetBound(Boundary::VELOCITY_Y, velocity_y);
+	BoundaryConditions(Boundary::VELOCITY_Y, velocity_y);
 }
 
+// Apply vorticity confinement to recover some of the energy lost due to numerical dissipation
+// This allows the fluid to exhibit small scale curl
+// Stores vorticity/curl in curl
 void Fluid::VorticityConfinement(float* vel_x, float* vel_y, float* curl)
 {
 	// Compute curl
 	for (int j = 1; j < size - 1; j++)
 	{
 		for (int i = 1; i < size - 1; i++)
-		{
-			
+		{			
 			curl[INDEX(i, j)] = vel_x[INDEX(i, j + 1)] - vel_x[INDEX(i, j - 1)] +
 				                vel_y[INDEX(i - 1, j)] - vel_y[INDEX(i + 1, j)];
 		}
 	}
 
-	// Apply vorticy confinement
+	// Apply vorticity confinement based on the curl
 	for (int j = 1; j < size - 1; j++)
 	{
 		for (int i = 1; i < size - 1; i++)
@@ -472,6 +352,131 @@ void Fluid::VorticityConfinement(float* vel_x, float* vel_y, float* curl)
 			const int ij = INDEX(i, j);		
 			vel_x[ij] += delta_time * curl[ij] * vorticity_confinement_eta * inv_length * dx;
 			vel_x[ij] += delta_time * curl[ij] * vorticity_confinement_eta * inv_length * dy;
+		}
+	}
+}
+
+// Every velocity field is the sum of an incompressible field and a gradient field
+// To obtain an incompressible field we subtract the gradient field from our current velocities
+// Stores pressure in p and divergence in div
+void Fluid::Project(float* vel_x, float* vel_y, float* p, float* div)
+{
+	const float factor = -0.5f / size;
+
+	int i, j;
+
+	for (j = 1; j < size - 1; j++)
+	{
+		for (i = 1; i < size - 1; i++)
+		{
+			// Compute divergence
+			div[INDEX(i, j)] = factor * (vel_x[INDEX(i + 1, j)] - vel_x[INDEX(i - 1, j)] +
+				vel_y[INDEX(i, j + 1)] - vel_y[INDEX(i, j - 1)]);
+			// Initialize pressure to zero
+			p[INDEX(i, j)] = 0;
+		}
+	}
+
+	BoundaryConditions(DIFFUSE, div);
+	BoundaryConditions(DIFFUSE, p);
+
+	// Solve pressure from divergence
+	GaussSeidel(DIFFUSE, p, div, 1, 4);
+
+	for (int j = 1; j < size - 1; j++)
+	{
+		for (int i = 1; i < size - 1; i++)
+		{
+			// Subtract pressure gradient to make x and y velocities incompressible again
+			vel_x[INDEX(i, j)] -= 0.5f * (p[INDEX(i + 1, j)] - p[INDEX(i - 1, j)]) * size;
+			vel_y[INDEX(i, j)] -= 0.5f * (p[INDEX(i, j + 1)] - p[INDEX(i, j - 1)]) * size;
+		}
+	}
+
+	BoundaryConditions(VELOCITY_X, vel_x);
+	BoundaryConditions(VELOCITY_Y, vel_y);
+}
+
+void Fluid::BoundaryConditions(const Boundary b, float* x)
+{
+	// Handle edge of screen boundaries
+	for (int i = 1; i < size - 1; i++)
+	{
+		// Copy if x is not velocity_y or velocity_y prev, otherwise negate
+		x[INDEX(i, 0)] = b == Boundary::VELOCITY_Y ? -x[INDEX(i, 1)] : x[INDEX(i, 1)];
+		x[INDEX(i, size - 1)] = b == Boundary::VELOCITY_Y ? -x[INDEX(i, size - 2)] : x[INDEX(i, size - 2)];
+
+		// Copy if x is not velocity_x or velocity_x prev, otherwise negate
+		x[INDEX(0, i)] = b == Boundary::VELOCITY_X ? -x[INDEX(1, i)] : x[INDEX(1, i)];
+		x[INDEX(size - 1, i)] = b == Boundary::VELOCITY_X ? -x[INDEX(size - 2, i)] : x[INDEX(size - 2, i)];
+	}
+
+	// Handle the corners of the boundary
+	x[INDEX(0, 0)] = 0.5f * (x[INDEX(1, 0)] + x[INDEX(0, 1)]);
+	x[INDEX(0, size - 1)] = 0.5f * (x[INDEX(1, size - 1)] + x[INDEX(0, size - 2)]);
+	x[INDEX(size - 1, 0)] = 0.5f * (x[INDEX(size - 2, 0)] + x[INDEX(size - 1, 1)]);
+	x[INDEX(size - 1, size - 1)] = 0.5f * (x[INDEX(size - 2, size - 1)] + x[INDEX(size - 1, size - 2)]);
+
+	// Handle obstacles in the grid
+	for (int j = 1; j < size - 1; j++)
+	{
+		for (int i = 1; i < size - 1; i++)
+		{
+			const int ij = INDEX(i, j);
+
+			if (obstacle[ij])
+			{
+				switch (b)
+				{
+				case Boundary::VELOCITY_X:
+				{
+					const int index_left = INDEX(i - 1, j);
+					const int index_right = INDEX(i + 1, j);
+
+					if (!obstacle[index_left])
+					{
+						// If the cell to the left is free, negate x component of velocity
+						x[ij] = -x[index_left];
+					}
+					else if (!obstacle[index_right])
+					{
+						// If the cell to the right is free, negate x component of velocity
+						x[ij] = -x[index_right];
+					}
+					else
+					{
+						// Averge of left and right cells
+						x[ij] = 0.5f * (x[index_left] + x[index_right]);
+					}
+
+					break;
+				}
+
+				case Boundary::VELOCITY_Y:
+				{
+					const int index_up = INDEX(i, j - 1);
+					const int index_down = INDEX(i, j + 1);
+
+					if (!obstacle[index_up])
+					{
+						// If the cell above is free, negate y component of velocity
+						x[ij] = -x[index_up];
+					}
+					else if (!obstacle[index_down])
+					{
+						// If the cell below is free, negate y component of velocity
+						x[ij] = -x[index_down];
+					}
+					else
+					{
+						// Average of up and down cells
+						x[ij] = 0.5f * (x[index_up] + x[index_down]);
+					}
+
+					break;
+				}
+				}
+			}
 		}
 	}
 }
@@ -495,6 +500,6 @@ void Fluid::GaussSeidel(const Boundary b, float* x, const float* x0, const float
 			}
 		}
 
-		SetBound(b, x);
+		BoundaryConditions(b, x);
 	}
 }
