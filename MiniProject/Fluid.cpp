@@ -151,7 +151,7 @@ void Fluid::Update()
 	// Apply external forces
 	ExternalForces(velocity_x, velocity_y);
 
-	// Apply velocity confinement
+	// Apply velocity confinement (basically also an external force)
 	VorticityConfinement(velocity_x, velocity_y, velocity_x_copy);
 
 	// Project to incompressible fluid
@@ -185,34 +185,35 @@ void Fluid::Render(Display& display, RenderMode render_mode)
 			}
 			else
 			{
+				vec3 colour;
+
 				switch (render_mode)
 				{
 					case RenderMode::RENDER_DENSITY:
 					{
-						screen[(int)(i * scale_x + j * scale_y * width)] = vec3(density[INDEX(i, j)] * 2.5f);
+						// Multiply density by 2.5f for better visual clarity
+						colour = vec3(density[INDEX(i, j)] * 2.5f);
 
 						break;
 					}
 
 					case RenderMode::RENDER_TEMPERATURE:
 					{
-						const int temp = CLAMP((int)temperature[INDEX(i, j)], 0, palette_size - 1);
-
-						screen[(int)(i * scale_x + j * scale_y * width)] = palette[temp];
+						// Sample heat map palette
+						colour = palette[CLAMP((int)temperature[INDEX(i, j)], 0, palette_size - 1)];
 
 						break;
 					}
 
 					case RenderMode::RENDER_VELOCITY:
 					{
-						screen[(int)(i * scale_x + j * scale_y * width)] = vec3(
-							velocity_x[INDEX(i, j)] + 0.5f, 
-							velocity_y[INDEX(i, j)] + 0.5f, 
-							0.5f);
+						colour = vec3(velocity_x[INDEX(i, j)] + 0.5f, velocity_y[INDEX(i, j)] + 0.5f, 0.5f);
 
 						break;
 					}
 				}
+				
+				screen[(int)(i * scale_x + j * scale_y * width)] = colour;
 			}
 		}
 	}
@@ -303,7 +304,7 @@ void Fluid::Advect(const Boundary b, float* d, float* d0, const float* vel_x, co
 // Resolve external forces
 void Fluid::ExternalForces(float* vel_x, float* vel_y)
 {
-	const float kappa =  1.3f; // Gravity and Mass scale factor (downward force)
+	const float kappa =  1.1f; // Gravity and Mass scale factor (downward force)
 	const float sigma = -2.5f; // Temperature scale factor		(upward   force)
 
 	const float inv_room_temp = 1.0f / room_temperature;
@@ -335,8 +336,8 @@ void Fluid::VorticityConfinement(float* vel_x, float* vel_y, float* curl)
 	{
 		for (int i = 1; i < size - 1; i++)
 		{			
-			curl[INDEX(i, j)] = vel_x[INDEX(i, j + 1)] - vel_x[INDEX(i, j - 1)] +
-				                vel_y[INDEX(i - 1, j)] - vel_y[INDEX(i + 1, j)];
+			curl[INDEX(i, j)] = vel_x[INDEX(i,     j + 1)] - vel_x[INDEX(i,     j - 1)] +
+				                vel_y[INDEX(i - 1, j    )] - vel_y[INDEX(i + 1, j    )];
 		}
 	}
 
@@ -346,15 +347,15 @@ void Fluid::VorticityConfinement(float* vel_x, float* vel_y, float* curl)
 		for (int i = 1; i < size - 1; i++)
 		{
 			// Compute gradient of curl in x and y directions
-			const float dx = abs(curl[INDEX(i + 1, j    )]) - abs(curl[INDEX(i - 1, j    )]);
-			const float dy = abs(curl[INDEX(i,     j - 1)]) - abs(curl[INDEX(i    , j + 1)]);
+			const float dx = abs(curl[INDEX(i,     j - 1)]) - abs(curl[INDEX(i    , j + 1)]);
+			const float dy = abs(curl[INDEX(i + 1, j    )]) - abs(curl[INDEX(i - 1, j    )]);
 
 			// Normalization factor for dx and dy (1e-5 avoids zero division)
 			const float inv_length = 1.0f / (sqrt(dx * dx + dy * dy) + 1e-5);
 
 			const int ij = INDEX(i, j);		
-			vel_x[ij] += delta_time * curl[ij] * vorticity_confinement_eta * inv_length * dy;
-			vel_y[ij] += delta_time * curl[ij] * vorticity_confinement_eta * inv_length * dx;
+			vel_x[ij] += delta_time * curl[ij] * vorticity_confinement_eta * inv_length * dx;
+			vel_y[ij] += delta_time * curl[ij] * vorticity_confinement_eta * inv_length * dy;
 		}
 	}
 }
