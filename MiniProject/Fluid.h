@@ -31,6 +31,8 @@ public:
 
 	const float room_temperature;
 
+	const float vorticity_confinement_eta;
+
 	int palette_size;
 	glm::vec3* palette;
 
@@ -48,7 +50,7 @@ public:
 
 	bool* obstacle;
 
-	Fluid(int size, float delta_time, float viscosity, float density_diffusion, float temperature_diffusion, float room_temperature);
+	Fluid(int size, float delta_time, float viscosity, float density_diffusion, float temperature_diffusion, float room_temperature, float vorticity_confinement_eta);
 	~Fluid();
 
 	void AddDensity(int x, int y, float amount);
@@ -65,7 +67,8 @@ public:
 
 	void Diffuse(const Boundary b, float* x, const float* x0, const float amount);
 	void Advect(const Boundary b, float* d, float* d0, const float* vel_x, const float* vel_y);
-	void ExternalForces();
+	void ExternalForces(float* vel_x, float* vel_y);
+	void VorticityConfinement(float* vel_x, float* vel_y, float* curl);
 	void Project(float* vel_x, float* vel_y, float* p, float* div);
 	void SetBound(const Boundary b, float* x);
 

@@ -16,13 +16,14 @@
 using namespace std;
 using namespace glm;
 
-Fluid::Fluid(int size, float delta_time, float viscosity, float density_diffusion, float temperature_diffusion, float room_temperature) :
+Fluid::Fluid(int size, float delta_time, float viscosity, float density_diffusion, float temperature_diffusion, float room_temperature, float vorticity_confinement_eta) :
 	size(size), 
 	viscosity(viscosity), 
 	delta_time(delta_time), 
 	density_diffusion(density_diffusion),
 	temperature_diffusion(temperature_diffusion),
-	room_temperature(room_temperature)
+	room_temperature(room_temperature),
+	vorticity_confinement_eta(vorticity_confinement_eta)
 {
 	// Allocate grids
 	const int mem_size = size * size;
@@ -147,7 +148,10 @@ void Fluid::Update()
 	Advect(VELOCITY_Y, velocity_y, velocity_y_copy, velocity_x_copy, velocity_y_copy);
 
 	// Apply external forces
-	ExternalForces();
+	ExternalForces(velocity_x, velocity_y);
+
+	// Apply velocity confinement
+	VorticityConfinement(velocity_x, velocity_y, velocity_x_copy);
 
 	// Project to incompressible fluid
 	Project(velocity_x, velocity_y, velocity_x_copy, velocity_y_copy);
@@ -176,7 +180,7 @@ void Fluid::Render(Display& display, RenderMode render_mode)
 		{
 			if (obstacle[INDEX(i, j)])
 			{
-				//screen[(int)(i * scale_x + j * scale_y * width)] = vec3(0.6f, 0.2f, 0.2f);
+				screen[(int)(i * scale_x + j * scale_y * width)] = vec3(0.6f, 0.2f, 0.2f);
 			}
 			else
 			{
@@ -259,13 +263,14 @@ void Fluid::Project(float* vel_x, float* vel_y, float* p, float* div)
 	SetBound(DIFFUSE, div);
 	SetBound(DIFFUSE, p);
 
-	// Solve for pressure
+	// Solve pressure from divergence
 	GaussSeidel(DIFFUSE, p, div, 1, 4);
 
 	for (int j = 1; j < size - 1; j++) 
 	{
 		for (int i = 1; i < size - 1; i++) 
 		{
+			// Subtract pressure gradient to make x and y velocities incompressible again
 			vel_x[INDEX(i, j)] -= 0.5f * (p[INDEX(i + 1, j    )] - p[INDEX(i - 1, j    )]) * size;
 			vel_y[INDEX(i, j)] -= 0.5f * (p[INDEX(i,     j + 1)] - p[INDEX(i,     j - 1)]) * size;
 		}
@@ -415,10 +420,10 @@ void Fluid::SetBound(const Boundary b, float* x)
 }
 
 // Resolve external forces
-void Fluid::ExternalForces()
+void Fluid::ExternalForces(float* vel_x, float* vel_y)
 {
-	const float kappa =  1.1f; // Gravity and Mass scale factor (downward force)
-	const float sigma = -5.0f; // Temperature scale factor		(upward   force)
+	const float kappa =  1.3f; // Gravity and Mass scale factor (downward force)
+	const float sigma = -2.5f; // Temperature scale factor		(upward   force)
 
 	const float inv_room_temp = 1.0f / room_temperature;
 	
@@ -432,11 +437,43 @@ void Fluid::ExternalForces()
 			const float f_ext = kappa * density[ij] + sigma * (inv_room_temp - 1.0f / temperature[ij]);
 
 			// Apply buoyancy force in the up direction
-			velocity_y[ij] += f_ext * delta_time;
+			vel_y[ij] += f_ext * delta_time;
 		}
 	}
 
 	SetBound(Boundary::VELOCITY_Y, velocity_y);
+}
+
+void Fluid::VorticityConfinement(float* vel_x, float* vel_y, float* curl)
+{
+	// Compute curl
+	for (int j = 1; j < size - 1; j++)
+	{
+		for (int i = 1; i < size - 1; i++)
+		{
+			
+			curl[INDEX(i, j)] = vel_x[INDEX(i, j + 1)] - vel_x[INDEX(i, j - 1)] +
+				                vel_y[INDEX(i - 1, j)] - vel_y[INDEX(i + 1, j)];
+		}
+	}
+
+	// Apply vorticy confinement
+	for (int j = 1; j < size - 1; j++)
+	{
+		for (int i = 1; i < size - 1; i++)
+		{
+			// Compute gradient of curl in x and y directions
+			const float dx = abs(curl[INDEX(i,     j - 1)]) - abs(curl[INDEX(i    , j + 1)]);
+			const float dy = abs(curl[INDEX(i + 1, j    )]) - abs(curl[INDEX(i - 1, j    )]);
+
+			// Normalization factor for dx and dy (1e-5 avoids zero division)
+			const float inv_length = 1.0f / (sqrt(dx * dx + dy * dy) + 1e-5);
+
+			const int ij = INDEX(i, j);		
+			vel_x[ij] += delta_time * curl[ij] * vorticity_confinement_eta * inv_length * dx;
+			vel_x[ij] += delta_time * curl[ij] * vorticity_confinement_eta * inv_length * dy;
+		}
+	}
 }
 
 // Gauss-Seidel method to iteratively solve linear systems
