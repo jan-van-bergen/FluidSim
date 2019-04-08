@@ -371,7 +371,7 @@ void Fluid::Project(float* vel_x, float* vel_y, float* p, float* div)
 		{
 			// Compute divergence
 			div[INDEX(i, j)] = factor * (vel_x[INDEX(i + 1, j)] - vel_x[INDEX(i - 1, j)] +
-				vel_y[INDEX(i, j + 1)] - vel_y[INDEX(i, j - 1)]);
+				                         vel_y[INDEX(i, j + 1)] - vel_y[INDEX(i, j - 1)]);
 			// Initialize pressure to zero
 			p[INDEX(i, j)] = 0;
 		}
@@ -403,18 +403,18 @@ void Fluid::BoundaryConditions(const Boundary b, float* x)
 	for (int i = 1; i < size - 1; i++)
 	{
 		// Copy if x is not velocity_y or velocity_y prev, otherwise negate
-		x[INDEX(i, 0)] = b == Boundary::VELOCITY_Y ? -x[INDEX(i, 1)] : x[INDEX(i, 1)];
+		x[INDEX(i, 0)]        = b == Boundary::VELOCITY_Y ? -x[INDEX(i, 1       )] : x[INDEX(i, 1       )];
 		x[INDEX(i, size - 1)] = b == Boundary::VELOCITY_Y ? -x[INDEX(i, size - 2)] : x[INDEX(i, size - 2)];
 
 		// Copy if x is not velocity_x or velocity_x prev, otherwise negate
-		x[INDEX(0, i)] = b == Boundary::VELOCITY_X ? -x[INDEX(1, i)] : x[INDEX(1, i)];
+		x[INDEX(0, i       )] = b == Boundary::VELOCITY_X ? -x[INDEX(1, i       )] : x[INDEX(1, i       )];
 		x[INDEX(size - 1, i)] = b == Boundary::VELOCITY_X ? -x[INDEX(size - 2, i)] : x[INDEX(size - 2, i)];
 	}
 
 	// Handle the corners of the boundary
-	x[INDEX(0, 0)] = 0.5f * (x[INDEX(1, 0)] + x[INDEX(0, 1)]);
-	x[INDEX(0, size - 1)] = 0.5f * (x[INDEX(1, size - 1)] + x[INDEX(0, size - 2)]);
-	x[INDEX(size - 1, 0)] = 0.5f * (x[INDEX(size - 2, 0)] + x[INDEX(size - 1, 1)]);
+	x[INDEX(0,        0)]        = 0.5f * (x[INDEX(1,        0)]        + x[INDEX(0,        1       )]);
+	x[INDEX(0,        size - 1)] = 0.5f * (x[INDEX(1,        size - 1)] + x[INDEX(0,        size - 2)]);
+	x[INDEX(size - 1, 0)]        = 0.5f * (x[INDEX(size - 2, 0)]        + x[INDEX(size - 1, 1       )]);
 	x[INDEX(size - 1, size - 1)] = 0.5f * (x[INDEX(size - 2, size - 1)] + x[INDEX(size - 1, size - 2)]);
 
 	// Handle obstacles in the grid
@@ -428,53 +428,53 @@ void Fluid::BoundaryConditions(const Boundary b, float* x)
 			{
 				switch (b)
 				{
-				case Boundary::VELOCITY_X:
-				{
-					const int index_left = INDEX(i - 1, j);
-					const int index_right = INDEX(i + 1, j);
+					case Boundary::VELOCITY_X:
+					{
+						const int index_left  = INDEX(i - 1, j);
+						const int index_right = INDEX(i + 1, j);
 
-					if (!obstacle[index_left])
-					{
-						// If the cell to the left is free, negate x component of velocity
-						x[ij] = -x[index_left];
-					}
-					else if (!obstacle[index_right])
-					{
-						// If the cell to the right is free, negate x component of velocity
-						x[ij] = -x[index_right];
-					}
-					else
-					{
-						// Averge of left and right cells
-						x[ij] = 0.5f * (x[index_left] + x[index_right]);
-					}
+						if (!obstacle[index_left])
+						{
+							// If the cell to the left is free, negate x component of velocity
+							x[ij] = -x[index_left];
+						}
+						else if (!obstacle[index_right])
+						{
+							// If the cell to the right is free, negate x component of velocity
+							x[ij] = -x[index_right];
+						}
+						else
+						{
+							// Averge of left and right cells
+							x[ij] = 0.5f * (x[index_left] + x[index_right]);
+						}
 
-					break;
-				}
-
-				case Boundary::VELOCITY_Y:
-				{
-					const int index_up = INDEX(i, j - 1);
-					const int index_down = INDEX(i, j + 1);
-
-					if (!obstacle[index_up])
-					{
-						// If the cell above is free, negate y component of velocity
-						x[ij] = -x[index_up];
-					}
-					else if (!obstacle[index_down])
-					{
-						// If the cell below is free, negate y component of velocity
-						x[ij] = -x[index_down];
-					}
-					else
-					{
-						// Average of up and down cells
-						x[ij] = 0.5f * (x[index_up] + x[index_down]);
+						break;
 					}
 
-					break;
-				}
+					case Boundary::VELOCITY_Y:
+					{
+						const int index_up   = INDEX(i, j - 1);
+						const int index_down = INDEX(i, j + 1);
+
+						if (!obstacle[index_up])
+						{
+							// If the cell above is free, negate y component of velocity
+							x[ij] = -x[index_up];
+						}
+						else if (!obstacle[index_down])
+						{
+							// If the cell below is free, negate y component of velocity
+							x[ij] = -x[index_down];
+						}
+						else
+						{
+							// Average of up and down cells
+							x[ij] = 0.5f * (x[index_up] + x[index_down]);
+						}
+
+						break;
+					}
 				}
 			}
 		}
