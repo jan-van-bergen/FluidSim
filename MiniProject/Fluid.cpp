@@ -346,15 +346,15 @@ void Fluid::VorticityConfinement(float* vel_x, float* vel_y, float* curl)
 		for (int i = 1; i < size - 1; i++)
 		{
 			// Compute gradient of curl in x and y directions
-			const float dx = abs(curl[INDEX(i,     j - 1)]) - abs(curl[INDEX(i    , j + 1)]);
-			const float dy = abs(curl[INDEX(i + 1, j    )]) - abs(curl[INDEX(i - 1, j    )]);
+			const float dx = abs(curl[INDEX(i + 1, j    )]) - abs(curl[INDEX(i - 1, j    )]);
+			const float dy = abs(curl[INDEX(i,     j - 1)]) - abs(curl[INDEX(i    , j + 1)]);
 
 			// Normalization factor for dx and dy (1e-5 avoids zero division)
 			const float inv_length = 1.0f / (sqrt(dx * dx + dy * dy) + 1e-5);
 
 			const int ij = INDEX(i, j);		
-			vel_x[ij] += delta_time * curl[ij] * vorticity_confinement_eta * inv_length * dx;
-			vel_y[ij] += delta_time * curl[ij] * vorticity_confinement_eta * inv_length * dy;
+			vel_x[ij] += delta_time * curl[ij] * vorticity_confinement_eta * inv_length * dy;
+			vel_y[ij] += delta_time * curl[ij] * vorticity_confinement_eta * inv_length * dx;
 		}
 	}
 }
