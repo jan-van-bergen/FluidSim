@@ -219,6 +219,7 @@ void Fluid::Render(Display& display, RenderMode render_mode)
 	}
 }
 
+// Reset all quanitites in the grid to their defaults
 void Fluid::Reset()
 {
 	for (int i = 0; i < size * size; i++)
@@ -239,6 +240,7 @@ void Fluid::Reset()
 	}
 }
 
+// Diffuse field x0 and store it in x
 void Fluid::Diffuse(const Boundary b, float* x, const float* x0, const float amount)
 {
 	const float a = delta_time * amount * (size - 2) * (size - 2);
@@ -250,8 +252,8 @@ void Fluid::Diffuse(const Boundary b, float* x, const float* x0, const float amo
 // Advect field d from field d0 according to the x and y velocities in the grid
 void Fluid::Advect(const Boundary b, float* d, float* d0, const float* vel_x, const float* vel_y)
 {
-	const float dt_horizontal = delta_time * (size - 2);
-	const float dt_vertical   = delta_time * (size - 2);
+	const float delta_hor = delta_time * (size - 2);
+	const float delta_ver = delta_time * (size - 2);
 	
 	const float edge         = size + 0.5f;
 	const float size_minus_1 = size - 1;
@@ -260,41 +262,43 @@ void Fluid::Advect(const Boundary b, float* d, float* d0, const float* vel_x, co
 	{
 		for (int i = 1; i < size - 1; i++) 
 		{
+			if (obstacle[INDEX(i, j)]) continue;
+
 			// Move backward according to current velocities
-			float x = i - dt_horizontal * vel_x[INDEX(i, j)];
-			float y = j - dt_vertical   * vel_y[INDEX(i, j)];
+			float x = i - delta_hor * vel_x[INDEX(i, j)];
+			float y = j - delta_ver * vel_y[INDEX(i, j)];
 			
 			// Clamp x and y to be valid
 			x = CLAMP(x, 0.5f, edge);
 			y = CLAMP(y, 0.5f, edge);
 
 			// Find nearest corners
-			const float i0 = floorf(x);
-			const float j0 = floorf(y);
+			const float left = floorf(x);
+			const float up   = floorf(y);
 
 			// Check if the indices are valid
-			// We want to ensure that i0, j0, i1, j1 < size - 1
-			// This means we only need to check when i0, j0 >= 255 because i1 = i0 + 1 and j1 = j0 + 1
-			if (i0 >= size_minus_1 || j0 >= size_minus_1) continue;
+			// We want to ensure that left, up, right, down < size - 1
+			// This means we only need to check when left, up >= 255 because right = left + 1 and down = up + 1
+			if (left >= size_minus_1 || up >= size_minus_1) continue;
 
-			const float i1 = i0 + 1.0f;
-			const float j1 = j0 + 1.0f;
+			const float right = left + 1.0f;
+			const float down  = up   + 1.0f;
 
 			// Find interpolation factors
-			const float s1 = x - i0;
+			const float s1 = x - left;
 			const float s0 = 1 - s1;
-			const float t1 = y - j0;
+			const float t1 = y - up;
 			const float t0 = 1 - t1;
 			
 			// Cast to int for indexing
-			const int i0i = (int)i0;
-			const int i1i = (int)i1;
-			const int j0i = (int)j0;
-			const int j1i = (int)j1;
+			const int i0 = (int)left;
+			const int i1 = (int)right;
+			const int j0 = (int)up;
+			const int j1 = (int)down;
 
 			d[INDEX(i, j)] =
-				s0 * (t0 * d0[INDEX(i0i, j0i)] + t1 * d0[INDEX(i0i, j1i)]) +
-				s1 * (t0 * d0[INDEX(i1i, j0i)] + t1 * d0[INDEX(i1i, j1i)]);
+				s0 * (t0 * d0[INDEX(i0, j0)] + t1 * d0[INDEX(i0, j1)]) +
+				s1 * (t0 * d0[INDEX(i1, j0)] + t1 * d0[INDEX(i1, j1)]);
 		}
 	}
 
@@ -323,11 +327,11 @@ void Fluid::ExternalForces(float* vel_x, float* vel_y)
 		}
 	}
 
-	BoundaryConditions(Boundary::VELOCITY_Y, velocity_y);
+	BoundaryConditions(Boundary::VELOCITY_Y, vel_y);
 }
 
 // Apply vorticity confinement to recover some of the energy lost due to numerical dissipation
-// This allows the fluid to exhibit small scale curl
+// This allows the fluid to exhibit small scale curl, which it otherwise could not
 // Stores vorticity/curl in curl
 void Fluid::VorticityConfinement(float* vel_x, float* vel_y, float* curl)
 {
@@ -346,16 +350,16 @@ void Fluid::VorticityConfinement(float* vel_x, float* vel_y, float* curl)
 	{
 		for (int i = 1; i < size - 1; i++)
 		{
-			// Compute gradient of curl in x and y directions
-			const float dx = abs(curl[INDEX(i,     j - 1)]) - abs(curl[INDEX(i    , j + 1)]);
-			const float dy = abs(curl[INDEX(i + 1, j    )]) - abs(curl[INDEX(i - 1, j    )]);
+			// Compute gradient of the absolute value of the curl in x and y directions
+			const float dx = abs(curl[INDEX(i + 1, j    )]) - abs(curl[INDEX(i - 1, j    )]);
+			const float dy = abs(curl[INDEX(i,     j - 1)]) - abs(curl[INDEX(i    , j + 1)]);
 
 			// Normalization factor for dx and dy (1e-5 avoids zero division)
 			const float inv_length = 1.0f / (sqrt(dx * dx + dy * dy) + 1e-5);
 
 			const int ij = INDEX(i, j);		
-			vel_x[ij] += delta_time * curl[ij] * vorticity_confinement_eta * inv_length * dx;
-			vel_y[ij] += delta_time * curl[ij] * vorticity_confinement_eta * inv_length * dy;
+			vel_x[ij] += delta_time * curl[ij] * vorticity_confinement_eta * inv_length * dy;
+			vel_y[ij] += delta_time * curl[ij] * vorticity_confinement_eta * inv_length * dx;
 		}
 	}
 }
@@ -401,6 +405,7 @@ void Fluid::Project(float* vel_x, float* vel_y, float* p, float* div)
 	BoundaryConditions(VELOCITY_Y, vel_y);
 }
 
+// Enforce boundary conditions on field x
 void Fluid::BoundaryConditions(const Boundary b, float* x)
 {
 	// Handle edge of screen boundaries
@@ -420,6 +425,9 @@ void Fluid::BoundaryConditions(const Boundary b, float* x)
 	x[INDEX(0,        size - 1)] = 0.5f * (x[INDEX(1,        size - 1)] + x[INDEX(0,        size - 2)]);
 	x[INDEX(size - 1, 0)]        = 0.5f * (x[INDEX(size - 2, 0)]        + x[INDEX(size - 1, 1       )]);
 	x[INDEX(size - 1, size - 1)] = 0.5f * (x[INDEX(size - 2, size - 1)] + x[INDEX(size - 1, size - 2)]);
+
+	// Lookup table for the inverse of count
+	const float inv[5] = { 1.0f, 1.0f, 0.5f, 0.3333333f, 0.25f };
 
 	// Handle obstacles in the grid
 	for (int j = 1; j < size - 1; j++)
@@ -478,6 +486,23 @@ void Fluid::BoundaryConditions(const Boundary b, float* x)
 						}
 
 						break;
+					}
+
+					case Boundary::DIFFUSE:
+					{
+						float sum = 0;
+						int count = 0;
+
+						if (!obstacle[INDEX(i - 1, j    )]) { sum += x[INDEX(i - 1, j    )]; count++; } else // Wallthickness is always >= 2, so the two if statements can't both be true
+				        if (!obstacle[INDEX(i + 1, j    )]) { sum += x[INDEX(i + 1, j    )]; count++; }
+						if (!obstacle[INDEX(i,     j - 1)]) { sum += x[INDEX(i,     j - 1)]; count++; } else // Wallthickness is always >= 2, so the two if statements can't both be true
+						if (!obstacle[INDEX(i,     j + 1)]) { sum += x[INDEX(i,     j + 1)]; count++; }
+
+						if (count > 0)
+						{
+							// Divide sum by count
+							x[INDEX(i, j)] = sum * inv[count];
+						}
 					}
 				}
 			}
