@@ -355,7 +355,7 @@ void Fluid::VorticityConfinement(float* vel_x, float* vel_y, float* curl)
 			const float dy = abs(curl[INDEX(i,     j - 1)]) - abs(curl[INDEX(i    , j + 1)]);
 
 			// Normalization factor for dx and dy (1e-5 avoids zero division)
-			const float inv_length = 1.0f / (sqrt(dx * dx + dy * dy) + 1e-5);
+			const float inv_length = 1.0f / (sqrtf(dx * dx + dy * dy) + 1e-5);
 
 			const int ij = INDEX(i, j);		
 			vel_x[ij] += delta_time * curl[ij] * vorticity_confinement_eta * inv_length * dy;
@@ -371,15 +371,13 @@ void Fluid::Project(float* vel_x, float* vel_y, float* p, float* div)
 {
 	const float factor = -0.5f / size;
 
-	int i, j;
-
-	for (j = 1; j < size - 1; j++)
+	for (int j = 1; j < size - 1; j++)
 	{
-		for (i = 1; i < size - 1; i++)
+		for (int i = 1; i < size - 1; i++)
 		{
 			// Compute divergence
-			div[INDEX(i, j)] = factor * (vel_x[INDEX(i + 1, j)] - vel_x[INDEX(i - 1, j)] +
-				                         vel_y[INDEX(i, j + 1)] - vel_y[INDEX(i, j - 1)]);
+			div[INDEX(i, j)] = factor * (vel_x[INDEX(i + 1, j    )] - vel_x[INDEX(i - 1, j    )] +
+				                         vel_y[INDEX(i,     j + 1)] - vel_y[INDEX(i,     j - 1)]);
 			// Initialize pressure to zero
 			p[INDEX(i, j)] = 0;
 		}
@@ -396,8 +394,8 @@ void Fluid::Project(float* vel_x, float* vel_y, float* p, float* div)
 		for (int i = 1; i < size - 1; i++)
 		{
 			// Subtract pressure gradient to make x and y velocities incompressible again
-			vel_x[INDEX(i, j)] -= 0.5f * (p[INDEX(i + 1, j)] - p[INDEX(i - 1, j)]) * size;
-			vel_y[INDEX(i, j)] -= 0.5f * (p[INDEX(i, j + 1)] - p[INDEX(i, j - 1)]) * size;
+			vel_x[INDEX(i, j)] -= 0.5f * size * (p[INDEX(i + 1, j    )] - p[INDEX(i - 1, j    )]);
+			vel_y[INDEX(i, j)] -= 0.5f * size * (p[INDEX(i,     j + 1)] - p[INDEX(i,     j - 1)]);
 		}
 	}
 
@@ -426,7 +424,8 @@ void Fluid::BoundaryConditions(const Boundary b, float* x)
 	x[INDEX(size - 1, 0)]        = 0.5f * (x[INDEX(size - 2, 0)]        + x[INDEX(size - 1, 1       )]);
 	x[INDEX(size - 1, size - 1)] = 0.5f * (x[INDEX(size - 2, size - 1)] + x[INDEX(size - 1, size - 2)]);
 
-	// Lookup table for the inverse of count
+	// Lookup table for the inverse of the numbers 0, 1, 2, 3, 4 
+	// We don't care about zero division so we just define it as 1
 	const float inv[5] = { 1.0f, 1.0f, 0.5f, 0.3333333f, 0.25f };
 
 	// Handle obstacles in the grid
