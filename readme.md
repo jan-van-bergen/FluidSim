@@ -14,7 +14,7 @@
 ![Density](ScreenShots/Density.png "Density")
 
 #### Windtunnel Obstacle
-![Windtunnel Obstacle](ScreenShots/Fire_in_wind_shielded_by_obstacle.png "Windtunnel Obstacle")
+![Windtunnel Obstacle](ScreenShots/Fire_in_wind shielded_by_obstacle.png "Windtunnel Obstacle")
 
 #### Windtunnel
 ![Windtunnel](ScreenShots/Fire_in_wind.png "Windtunnel")
