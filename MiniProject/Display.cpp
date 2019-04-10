@@ -19,6 +19,7 @@ Display::Display(int window_width, int window_height, int buffer_width, int buff
 	m_buffer_width = buffer_width;
 	m_buffer_height = buffer_height;
 
+	// Create SDL window
 	SDL_Init(SDL_INIT_EVERYTHING);
 
 	SDL_GL_SetAttribute(SDL_GL_RED_SIZE, 8);
@@ -31,6 +32,7 @@ Display::Display(int window_width, int window_height, int buffer_width, int buff
 	m_window = SDL_CreateWindow(title.c_str(), SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, window_width, window_height, SDL_WINDOW_OPENGL);
 	m_glContext = SDL_GL_CreateContext(m_window);
 
+	// Initialize OpenGL
 	GLenum status = glewInit();
 
 	if (status != GLEW_OK)
@@ -64,6 +66,7 @@ Display::Display(int window_width, int window_height, int buffer_width, int buff
 	glMatrixMode(GL_PROJECTION);
 	glLoadIdentity();
 
+	// Initialize IMGUI
 	IMGUI_CHECKVERSION();
 	ImGui::CreateContext();
 
@@ -76,16 +79,18 @@ Display::Display(int window_width, int window_height, int buffer_width, int buff
 
 Display::~Display()
 {
+	// Free framebuffer
 	delete[] m_pixels;
 
+	// Clean up IMGUI
+	ImGui_ImplOpenGL3_Shutdown();
+	ImGui_ImplSDL2_Shutdown();
+	ImGui::DestroyContext();
+
+	// Cleanup SDL
 	SDL_GL_DeleteContext(m_glContext);
 	SDL_DestroyWindow(m_window);
 	SDL_Quit();
-}
-
-bool Display::IsClosed()
-{
-	return m_isClosed;
 }
 
 void Display::SetTitle(const std::string& title)
@@ -127,8 +132,10 @@ void Display::Update()
 	glTexCoord2f(0.0f, 0.0f); glVertex2f(-1.0f, 1.0f);
 	glEnd();
 
+	// Render IMGUI
 	ImGui::Render();
 	ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 
+	// Swap buffers to present rendered image
 	SDL_GL_SwapWindow(m_window);
 }

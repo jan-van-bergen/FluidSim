@@ -28,7 +28,7 @@ public:
 		return m_pixels;
 	}
 
-	bool IsClosed();
+	inline bool IsClosed() { return m_isClosed; }
 
 	void SetTitle(const std::string& title);
 
