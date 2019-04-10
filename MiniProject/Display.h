@@ -13,6 +13,8 @@ public:
 	void Clear();
 	void Update();
 
+	void StartGUI();
+
 	inline void Plot(int x, int y, float r, float g, float b) const
 	{
 		glm::vec3& pixel = m_pixels[x + m_buffer_width * y];
