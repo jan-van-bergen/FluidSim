@@ -161,12 +161,12 @@ void Fluid::Update()
 	Project(velocity_x, velocity_y, velocity_x_copy, velocity_y_copy);
 
 	// Diffuse density according to density diffusion
-	Diffuse(DIFFUSE, density_copy, density, density_diffusion);
-	Advect(DIFFUSE, density, density_copy, velocity_x, velocity_y);
+	Diffuse(OTHER, density_copy, density, density_diffusion);
+	Advect(OTHER, density, density_copy, velocity_x, velocity_y);
 
 	// Diffuse temperature according to temperature diffusion
-	Diffuse(DIFFUSE, temperature_copy, temperature, temperature_diffusion);
-	Advect(DIFFUSE, temperature, temperature_copy, velocity_x, velocity_y);
+	Diffuse(OTHER, temperature_copy, temperature, temperature_diffusion);
+	Advect(OTHER, temperature, temperature_copy, velocity_x, velocity_y);
 }
 
 // Render the fluid simulation to the display
@@ -244,7 +244,7 @@ void Fluid::Reset()
 }
 
 // Diffuse field x0 and store it in x
-void Fluid::Diffuse(const Boundary b, float* x, const float* x0, const float amount)
+void Fluid::Diffuse(const BoundaryType b, float* x, const float* x0, const float amount)
 {
 	const float a = delta_time * amount * (size - 2) * (size - 2);
 
@@ -253,7 +253,7 @@ void Fluid::Diffuse(const Boundary b, float* x, const float* x0, const float amo
 
 // Semi-Lagrangian advection
 // Advect field d from field d0 according to the x and y velocities in the grid
-void Fluid::Advect(const Boundary b, float* d, float* d0, const float* vel_x, const float* vel_y)
+void Fluid::Advect(const BoundaryType b, float* d, float* d0, const float* vel_x, const float* vel_y)
 {
 	const float delta_hor = delta_time * (size - 2);
 	const float delta_ver = delta_time * (size - 2);
@@ -329,7 +329,7 @@ void Fluid::ExternalForces(float* vel_x, float* vel_y)
 		}
 	}
 
-	BoundaryConditions(Boundary::VELOCITY_Y, vel_y);
+	BoundaryConditions(BoundaryType::VELOCITY_Y, vel_y);
 }
 
 // Apply vorticity confinement to recover some of the energy lost due to numerical dissipation
@@ -388,11 +388,11 @@ void Fluid::Project(float* vel_x, float* vel_y, float* p, float* div)
 		}
 	}
 
-	BoundaryConditions(DIFFUSE, div);
-	BoundaryConditions(DIFFUSE, p);
+	BoundaryConditions(OTHER, div);
+	BoundaryConditions(OTHER, p);
 
 	// Solve pressure from divergence
-	GaussSeidel(DIFFUSE, p, div, 1, 4);
+	GaussSeidel(OTHER, p, div, 1, 4);
 
 	for (int j = 1; j < size - 1; j++)
 	{
@@ -413,18 +413,18 @@ void Fluid::Project(float* vel_x, float* vel_y, float* p, float* div)
 }
 
 // Enforce boundary conditions on field x
-void Fluid::BoundaryConditions(const Boundary b, float* x)
+void Fluid::BoundaryConditions(const BoundaryType b, float* x)
 {
 	// Handle edge of screen boundaries
 	for (int i = 1; i < size - 1; i++)
 	{
 		// Copy if x is not velocity_y or velocity_y prev, otherwise negate
-		x[INDEX(i, 0)]        = b == Boundary::VELOCITY_Y ? -x[INDEX(i, 1       )] : x[INDEX(i, 1       )];
-		x[INDEX(i, size - 1)] = b == Boundary::VELOCITY_Y ? -x[INDEX(i, size - 2)] : x[INDEX(i, size - 2)];
+		x[INDEX(i, 0)]        = b == BoundaryType::VELOCITY_Y ? -x[INDEX(i, 1       )] : x[INDEX(i, 1       )];
+		x[INDEX(i, size - 1)] = b == BoundaryType::VELOCITY_Y ? -x[INDEX(i, size - 2)] : x[INDEX(i, size - 2)];
 
 		// Copy if x is not velocity_x or velocity_x prev, otherwise negate
-		x[INDEX(0, i       )] = b == Boundary::VELOCITY_X ? -x[INDEX(1, i       )] : x[INDEX(1, i       )];
-		x[INDEX(size - 1, i)] = b == Boundary::VELOCITY_X ? -x[INDEX(size - 2, i)] : x[INDEX(size - 2, i)];
+		x[INDEX(0, i       )] = b == BoundaryType::VELOCITY_X ? -x[INDEX(1, i       )] : x[INDEX(1, i       )];
+		x[INDEX(size - 1, i)] = b == BoundaryType::VELOCITY_X ? -x[INDEX(size - 2, i)] : x[INDEX(size - 2, i)];
 	}
 
 	// Handle the corners of the boundary
@@ -448,7 +448,7 @@ void Fluid::BoundaryConditions(const Boundary b, float* x)
 			{
 				switch (b)
 				{
-					case Boundary::VELOCITY_X:
+					case BoundaryType::VELOCITY_X:
 					{
 						const int index_left  = INDEX(i - 1, j);
 						const int index_right = INDEX(i + 1, j);
@@ -472,7 +472,7 @@ void Fluid::BoundaryConditions(const Boundary b, float* x)
 						break;
 					}
 
-					case Boundary::VELOCITY_Y:
+					case BoundaryType::VELOCITY_Y:
 					{
 						const int index_up   = INDEX(i, j - 1);
 						const int index_down = INDEX(i, j + 1);
@@ -496,7 +496,7 @@ void Fluid::BoundaryConditions(const Boundary b, float* x)
 						break;
 					}
 
-					case Boundary::DIFFUSE:
+					case BoundaryType::OTHER:
 					{
 						float sum = 0;
 						int count = 0;
@@ -520,7 +520,7 @@ void Fluid::BoundaryConditions(const Boundary b, float* x)
 
 // Gauss-Seidel method to iteratively solve linear systems
 // x is what we are trying to solve for
-void Fluid::GaussSeidel(const Boundary b, float* x, const float* x0, const float a, const float c)
+void Fluid::GaussSeidel(const BoundaryType b, float* x, const float* x0, const float a, const float c)
 {
 	const float inv_c = 1.0f / c;
 

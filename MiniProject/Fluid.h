@@ -3,11 +3,11 @@
 #include "Display.h"
 
 // Array type used by boundary condition
-enum Boundary
+enum BoundaryType
 {
-	DIFFUSE    = 0,
-	VELOCITY_X = 1,
-	VELOCITY_Y = 2
+	VELOCITY_X = 0,
+	VELOCITY_Y = 1,
+	OTHER      = 2
 };
 
 // What field should we draw to the screen
@@ -42,14 +42,14 @@ private:
 
 	bool* obstacle;
 
-	void Diffuse(const Boundary b, float* x, const float* x0, const float amount);
-	void Advect(const Boundary b, float* d, float* d0, const float* vel_x, const float* vel_y);
+	void Diffuse(const BoundaryType b, float* x, const float* x0, const float amount);
+	void Advect(const BoundaryType b, float* d, float* d0, const float* vel_x, const float* vel_y);
 	void ExternalForces(float* vel_x, float* vel_y);
 	void VorticityConfinement(float* vel_x, float* vel_y, float* curl);
 	void Project(float* vel_x, float* vel_y, float* p, float* div);
-	void BoundaryConditions(const Boundary b, float* x);
+	void BoundaryConditions(const BoundaryType b, float* x);
 
-	void GaussSeidel(const Boundary b, float* x, const float* x0, const float a, const float c);
+	void GaussSeidel(const BoundaryType b, float* x, const float* x0, const float a, const float c);
 public:
 
 	float viscosity;
