@@ -11,22 +11,22 @@
 ## Screenshots
 
 #### Density Render Mode
-![Density](Screenshots/Density.png "Density")
+![Density](ScreenShots/Density.png "Density")
 
 #### Windtunnel Obstacle
-![Windtunnel Obstacle](Screenshots/Fire in wind shielded by obstacle.png "Windtunnel Obstacle")
+![Windtunnel Obstacle](ScreenShots/Fire_in_wind_shielded_by_obstacle.png "Windtunnel Obstacle")
 
 #### Windtunnel
-![Windtunnel](Screenshots/Fire in wind.png "Windtunnel")
+![Windtunnel](ScreenShots/Fire_in_wind.png "Windtunnel")
 
 #### Temperature into Obstacle
-![Obstacle](screenshots/Fire into obstacle.png "Obstacle")
+![Obstacle](ScreenShots/Fire_into_obstacle.png "Obstacle")
 
 #### Temperature Render Mode
-![Fire](screenshots/Fire.png "Fire")
+![Fire](ScreenShots/Fire.png "Fire")
 
 #### Velocity Render Mode
-![Motion](screenshots/Motion.png "Motion")
+![Motion](ScreenShots/Motion.png "Motion")
 
 ## Dependencies
 - SDL 2
