@@ -8,6 +8,26 @@
 - Internal boundaries that you can draw.
 - Vorticity confinement
 
+## Screenshots
+
+#### Density Render Mode
+![Density](Screenshots/Density.png "Density")
+
+#### Windtunnel Obstacle
+![Windtunnel Obstacle](Screenshots/Fire in wind shielded by obstacle.png "Windtunnel Obstacle")
+
+#### Windtunnel
+![Windtunnel](Screenshots/Fire in wind.png "Windtunnel")
+
+#### Temperature into Obstacle
+![Obstacle](screenshots/Fire into obstacle.png "Obstacle")
+
+#### Temperature Render Mode
+![Fire](screenshots/Fire.png "Fire")
+
+#### Velocity Render Mode
+![Motion](screenshots/Motion.png "Motion")
+
 ## Dependencies
 - SDL 2
 - GLEW
