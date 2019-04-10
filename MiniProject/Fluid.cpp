@@ -507,11 +507,11 @@ void Fluid::BoundaryConditions(const BoundaryType b, float* x)
 						// Compute average of all direct neightbours that are not obstacles
 						float sum = 0;
 						int count = 0;
-
-						if (!obstacle[INDEX(i - 1, j    )]) { sum += x[INDEX(i - 1, j    )]; count++; }  // Wallthickness is always >= 2, so if left is not an obstacle, right must be
-						else                                { sum += x[INDEX(i + 1, j    )]; count++; }
-						if (!obstacle[INDEX(i,     j - 1)]) { sum += x[INDEX(i,     j - 1)]; count++; }  // Wallthickness is always >= 2, so if above is not an obstacle, down must be
-						else                                { sum += x[INDEX(i,     j + 1)]; count++; }
+						
+						if (!obstacle[INDEX(i - 1, j    )]) { sum += x[INDEX(i - 1, j    )]; count++; } else // Wallthickness is always >= 2, so if left is free, right must contain an obstacle
+						if (!obstacle[INDEX(i + 1, j    )]) { sum += x[INDEX(i + 1, j    )]; count++; }
+						if (!obstacle[INDEX(i,     j - 1)]) { sum += x[INDEX(i,     j - 1)]; count++; } else // Wallthickness is always >= 2, so if above is free, down must contain an obstacle
+						if (!obstacle[INDEX(i,     j + 1)]) { sum += x[INDEX(i,     j + 1)]; count++; }
 
 						// Avoid zero division
 						if (count > 0)
