@@ -36,3 +36,5 @@
 
 DLL's, headers and lib's are included in the project and should work out of the box.
 The project uses a Visual Studio 2017 solution.
+
+This git repository was originally hosted on Gitlab.
