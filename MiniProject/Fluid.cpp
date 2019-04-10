@@ -87,6 +87,7 @@ Fluid::~Fluid()
 	delete[] palette;
 }
 
+// Add the given amount of density at the given x,y coordinate
 void Fluid::AddDensity(int x, int y, float amount)
 {
 	const int index = INDEX(x, y);
@@ -96,6 +97,7 @@ void Fluid::AddDensity(int x, int y, float amount)
 	density[index] += amount;
 }
 
+// Add the given amount of velocity at the given x,y coordinate
 void Fluid::AddVelocity(int x, int y, float amountX, float amountY)
 {
 	const int index = INDEX(x, y);
@@ -106,6 +108,7 @@ void Fluid::AddVelocity(int x, int y, float amountX, float amountY)
 	velocity_y[index] += amountY;
 }
 
+// Add the given amount of temperature at the given x,y coordinate
 void Fluid::AddTemperature(int x, int y, float amount)
 {
 	const int index = INDEX(x, y);
@@ -115,6 +118,7 @@ void Fluid::AddTemperature(int x, int y, float amount)
 	temperature[index] += amount;
 }
 
+// Adds an obstacle in the region around the given x,y coordinate
 void Fluid::AddObstacle(int x, int y)
 {
 	for (int j = y; j < y + WALL_THICKNESS; j++)
@@ -122,17 +126,6 @@ void Fluid::AddObstacle(int x, int y)
 		for (int i = x; i < x + WALL_THICKNESS; i++)
 		{
 			obstacle[INDEX(i, j)] = true;
-		}
-	}
-}
-
-void Fluid::RemoveObstacle(int x, int y)
-{
-	for (int j = y; j < y + WALL_THICKNESS; j++)
-	{
-		for (int i = x; i < x + WALL_THICKNESS; i++)
-		{
-			obstacle[INDEX(i, j)] = false;
 		}
 	}
 }
@@ -184,6 +177,7 @@ void Fluid::Render(Display& display, RenderMode render_mode)
 		{
 			if (obstacle[INDEX(i, j)])
 			{
+				// Draw grey pixel to indicate obstacle
 				screen[(int)(i * scale_x + j * scale_y * width)] = vec3(0.3f, 0.3f, 0.3f);
 			}
 			else
@@ -252,12 +246,11 @@ void Fluid::Diffuse(const BoundaryType b, float* x, const float* x0, const float
 }
 
 // Semi-Lagrangian advection
-// Advect field d from field d0 according to the x and y velocities in the grid
-void Fluid::Advect(const BoundaryType b, float* d, float* d0, const float* vel_x, const float* vel_y)
+// Advect field d0 and store it in d, according to the x and y velocities in the grid
+void Fluid::Advect(const BoundaryType b, float* d, const float* d0, const float* vel_x, const float* vel_y)
 {
-	const float delta_hor = delta_time * (size - 2);
-	const float delta_ver = delta_time * (size - 2);
-	
+	const float delta_size = delta_time * (size - 2);
+
 	const float edge         = size + 0.5f;
 	const float size_minus_1 = size - 1;
 
@@ -268,8 +261,8 @@ void Fluid::Advect(const BoundaryType b, float* d, float* d0, const float* vel_x
 			if (obstacle[INDEX(i, j)]) continue;
 
 			// Move backward according to current velocities
-			float x = i - delta_hor * vel_x[INDEX(i, j)];
-			float y = j - delta_ver * vel_y[INDEX(i, j)];
+			float x = i - delta_size * vel_x[INDEX(i, j)];
+			float y = j - delta_size * vel_y[INDEX(i, j)];
 			
 			// Clamp x and y to be valid
 			x = CLAMP(x, 0.5f, edge);
@@ -305,6 +298,7 @@ void Fluid::Advect(const BoundaryType b, float* d, float* d0, const float* vel_x
 		}
 	}
 
+	// Enforce boundary conditions on the advected field
 	BoundaryConditions(b, d);
 }
 
@@ -371,7 +365,7 @@ void Fluid::VorticityConfinement(float* vel_x, float* vel_y, float* curl)
 
 // Every velocity field is the sum of an incompressible field and a gradient field
 // To obtain an incompressible field we subtract the gradient field from our current velocities
-// Stores pressure in p and divergence in div
+// Stores pressure in p and divergence in div (both are used as temporary buffers)
 void Fluid::Project(float* vel_x, float* vel_y, float* p, float* div)
 {
 	const float factor = -0.5f / size;
@@ -388,10 +382,11 @@ void Fluid::Project(float* vel_x, float* vel_y, float* p, float* div)
 		}
 	}
 
+	// Enforce boundary conditions
 	BoundaryConditions(OTHER, div);
 	BoundaryConditions(OTHER, p);
 
-	// Solve pressure from divergence
+	// Obtain pressure from diffusing divergence
 	GaussSeidel(OTHER, p, div, 1, 4);
 
 	for (int j = 1; j < size - 1; j++)
@@ -408,6 +403,7 @@ void Fluid::Project(float* vel_x, float* vel_y, float* p, float* div)
 		}
 	}
 
+	// Enforce boundary conditions
 	BoundaryConditions(VELOCITY_X, vel_x);
 	BoundaryConditions(VELOCITY_Y, vel_y);
 }
@@ -433,8 +429,8 @@ void Fluid::BoundaryConditions(const BoundaryType b, float* x)
 	x[INDEX(size - 1, 0)]        = 0.5f * (x[INDEX(size - 2, 0)]        + x[INDEX(size - 1, 1       )]);
 	x[INDEX(size - 1, size - 1)] = 0.5f * (x[INDEX(size - 2, size - 1)] + x[INDEX(size - 1, size - 2)]);
 
-	// Lookup table for the inverse of the numbers 0, 1, 2, 3, 4 
-	// We don't care about zero division so we just define it as 1
+	// Lookup table for the inverse of the numbers 1, 2, 3, 4 
+	// We don't care about zero division so we arbitrarily define 1/0 = 1
 	const float inv[5] = { 1.0f, 1.0f, 0.5f, 0.3333333f, 0.25f };
 
 	// Handle obstacles in the grid
@@ -498,17 +494,19 @@ void Fluid::BoundaryConditions(const BoundaryType b, float* x)
 
 					case BoundaryType::OTHER:
 					{
+						// Compute average of all direct neightbours that are not obstacles
 						float sum = 0;
 						int count = 0;
 
-						if (!obstacle[INDEX(i - 1, j    )]) { sum += x[INDEX(i - 1, j    )]; count++; } else // Wallthickness is always >= 2, so the two if statements can't both be true
-				        if (!obstacle[INDEX(i + 1, j    )]) { sum += x[INDEX(i + 1, j    )]; count++; }
-						if (!obstacle[INDEX(i,     j - 1)]) { sum += x[INDEX(i,     j - 1)]; count++; } else // Wallthickness is always >= 2, so the two if statements can't both be true
-						if (!obstacle[INDEX(i,     j + 1)]) { sum += x[INDEX(i,     j + 1)]; count++; }
+						if (!obstacle[INDEX(i - 1, j    )]) { sum += x[INDEX(i - 1, j    )]; count++; }  // Wallthickness is always >= 2, so if left is not an obstacle, right must be
+						else                                { sum += x[INDEX(i + 1, j    )]; count++; }
+						if (!obstacle[INDEX(i,     j - 1)]) { sum += x[INDEX(i,     j - 1)]; count++; }  // Wallthickness is always >= 2, so if above is not an obstacle, down must be
+						else                                { sum += x[INDEX(i,     j + 1)]; count++; }
 
+						// Avoid zero division
 						if (count > 0)
 						{
-							// Divide sum by count
+							// Divide sum by count using lookup table
 							x[ij] = sum * inv[count];
 						}
 					}
