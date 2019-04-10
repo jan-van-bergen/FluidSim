@@ -23,8 +23,11 @@ Fluid::Fluid(int size, float delta_time, float viscosity, float density_diffusio
 	density_diffusion(density_diffusion),
 	temperature_diffusion(temperature_diffusion),
 	room_temperature(room_temperature),
-	vorticity_confinement_eta(vorticity_confinement_eta)
+	vorticity_confinement(vorticity_confinement_eta)
 {
+	kappa =  1.1f;
+	sigma = -2.5f;
+
 	// Allocate grids
 	const int mem_size = size * size;
 
@@ -181,7 +184,7 @@ void Fluid::Render(Display& display, RenderMode render_mode)
 		{
 			if (obstacle[INDEX(i, j)])
 			{
-				screen[(int)(i * scale_x + j * scale_y * width)] = vec3(0.5f, 0.1f, 0.1f);
+				screen[(int)(i * scale_x + j * scale_y * width)] = vec3(0.3f, 0.3f, 0.3f);
 			}
 			else
 			{
@@ -308,9 +311,6 @@ void Fluid::Advect(const Boundary b, float* d, float* d0, const float* vel_x, co
 // Resolve external forces
 void Fluid::ExternalForces(float* vel_x, float* vel_y)
 {
-	const float kappa =  1.1f; // Gravity and Mass scale factor (downward force)
-	const float sigma = -2.5f; // Temperature scale factor		(upward   force)
-
 	const float inv_room_temp = 1.0f / room_temperature;
 	
 	for (int j = 1; j < size - 1; j++)
@@ -318,6 +318,8 @@ void Fluid::ExternalForces(float* vel_x, float* vel_y)
 		for (int i = 1; i < size - 1; i++)
 		{
 			const int ij = INDEX(i, j);
+
+			if (obstacle[ij]) continue;
 
 			// external force = gravity + buoyancy
 			const float f_ext = kappa * density[ij] + sigma * (inv_room_temp - 1.0f / temperature[ij]);
@@ -358,8 +360,8 @@ void Fluid::VorticityConfinement(float* vel_x, float* vel_y, float* curl)
 			const float inv_length = 1.0f / (sqrtf(dx * dx + dy * dy) + 1e-5);
 
 			const int ij = INDEX(i, j);		
-			vel_x[ij] += delta_time * curl[ij] * vorticity_confinement_eta * inv_length * dy;
-			vel_y[ij] += delta_time * curl[ij] * vorticity_confinement_eta * inv_length * dx;
+			vel_x[ij] += delta_time * curl[ij] * vorticity_confinement * inv_length * dy;
+			vel_y[ij] += delta_time * curl[ij] * vorticity_confinement * inv_length * dx;
 		}
 	}
 }

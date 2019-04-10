@@ -4,6 +4,10 @@
 #include <cstring>
 #include <iostream>
 
+#include <Imgui/imgui.h>
+#include <Imgui/imgui_impl_sdl.h>
+#include <Imgui/imgui_impl_opengl3.h>
+
 using namespace glm;
 using namespace std;
 
@@ -59,6 +63,15 @@ Display::Display(int window_width, int window_height, int buffer_width, int buff
 	glLoadIdentity();
 	glMatrixMode(GL_PROJECTION);
 	glLoadIdentity();
+
+	IMGUI_CHECKVERSION();
+	ImGui::CreateContext();
+
+	// Setup Platform/Renderer bindings
+	ImGui_ImplSDL2_InitForOpenGL(m_window, m_glContext);
+	ImGui_ImplOpenGL3_Init("#version 130");
+
+	ImGui::StyleColorsDark();
 }
 
 Display::~Display()
@@ -91,6 +104,13 @@ void Display::Clear()
 	}
 }
 
+void Display::StartGUI()
+{
+	ImGui_ImplOpenGL3_NewFrame();
+	ImGui_ImplSDL2_NewFrame(m_window);
+	ImGui::NewFrame();
+}
+
 void Display::Update()
 {
 	// Clear window contents
@@ -106,6 +126,9 @@ void Display::Update()
 	glTexCoord2f(1.0f, 0.0f); glVertex2f(1.0f, 1.0f);
 	glTexCoord2f(0.0f, 0.0f); glVertex2f(-1.0f, 1.0f);
 	glEnd();
+
+	ImGui::Render();
+	ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 
 	SDL_GL_SwapWindow(m_window);
 }

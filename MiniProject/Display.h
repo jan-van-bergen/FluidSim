@@ -2,7 +2,6 @@
 #include <string>
 #include <GL/glew.h>
 #include <SDL2/SDL.h>
-#include <SOIL/SOIL.h> 
 #include <glm/glm.hpp>
 
 class Display
@@ -13,6 +12,8 @@ public:
 
 	void Clear();
 	void Update();
+
+	void StartGUI();
 
 	inline void Plot(int x, int y, float r, float g, float b) const
 	{
