@@ -42,7 +42,7 @@ We also provide various render modes to provide users a better understanding of 
 
 Headers and lib's are included in the project and should work out of the box.
 2 DLL's are required for the executable to work. These are glew32.dll and SDL.dll. They are currently in the root folder of the git repository, but should be placed in the same folder as the .exe (This is the ./Release folder when building with Visual Studio).
-<b>NOTE: Our SDL version does not seem work with the x64 platform WHICH IS THE DEFAULT SOLUTION PLATFORM WHEN OPENING THE SOLUTION WITH VISUAL STUDIO! It should be changed to x86.<b>
+<b>NOTE: Our SDL version does not seem work with the x64 platform WHICH IS THE DEFAULT SOLUTION PLATFORM WHEN OPENING THE SOLUTION WITH VISUAL STUDIO! It should be changed to x86.</b>
 The project uses a Visual Studio 2017 solution.
 
 (This git repository was originally hosted on Gitlab.)
