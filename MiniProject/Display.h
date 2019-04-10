@@ -2,7 +2,6 @@
 #include <string>
 #include <GL/glew.h>
 #include <SDL2/SDL.h>
-#include <SOIL/SOIL.h> 
 #include <glm/glm.hpp>
 
 class Display

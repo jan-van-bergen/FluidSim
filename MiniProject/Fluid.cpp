@@ -181,7 +181,7 @@ void Fluid::Render(Display& display, RenderMode render_mode)
 		{
 			if (obstacle[INDEX(i, j)])
 			{
-				screen[(int)(i * scale_x + j * scale_y * width)] = vec3(0.5f, 0.1f, 0.1f);
+				screen[(int)(i * scale_x + j * scale_y * width)] = vec3(0.3f, 0.3f, 0.3f);
 			}
 			else
 			{
@@ -318,6 +318,8 @@ void Fluid::ExternalForces(float* vel_x, float* vel_y)
 		for (int i = 1; i < size - 1; i++)
 		{
 			const int ij = INDEX(i, j);
+
+			if (obstacle[ij]) continue;
 
 			// external force = gravity + buoyancy
 			const float f_ext = kappa * density[ij] + sigma * (inv_room_temp - 1.0f / temperature[ij]);
