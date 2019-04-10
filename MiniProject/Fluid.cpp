@@ -352,6 +352,10 @@ void Fluid::VorticityConfinement(float* vel_x, float* vel_y, float* curl)
 	{
 		for (int i = 1; i < size - 1; i++)
 		{
+			const int ij = INDEX(i, j);
+
+			if (obstacle[ij]) continue;
+			
 			// Compute gradient of the absolute value of the curl in x and y directions
 			const float dx = abs(curl[INDEX(i + 1, j    )]) - abs(curl[INDEX(i - 1, j    )]);
 			const float dy = abs(curl[INDEX(i,     j - 1)]) - abs(curl[INDEX(i    , j + 1)]);
@@ -359,7 +363,6 @@ void Fluid::VorticityConfinement(float* vel_x, float* vel_y, float* curl)
 			// Normalization factor for dx and dy (1e-5 avoids zero division)
 			const float inv_length = 1.0f / (sqrtf(dx * dx + dy * dy) + 1e-5);
 
-			const int ij = INDEX(i, j);		
 			vel_x[ij] += delta_time * curl[ij] * vorticity_confinement * inv_length * dy;
 			vel_y[ij] += delta_time * curl[ij] * vorticity_confinement * inv_length * dx;
 		}
@@ -395,9 +398,13 @@ void Fluid::Project(float* vel_x, float* vel_y, float* p, float* div)
 	{
 		for (int i = 1; i < size - 1; i++)
 		{
+			const int ij = INDEX(i, j);
+
+			if (obstacle[ij]) continue;
+
 			// Subtract pressure gradient to make x and y velocities incompressible again
-			vel_x[INDEX(i, j)] -= 0.5f * size * (p[INDEX(i + 1, j    )] - p[INDEX(i - 1, j    )]);
-			vel_y[INDEX(i, j)] -= 0.5f * size * (p[INDEX(i,     j + 1)] - p[INDEX(i,     j - 1)]);
+			vel_x[ij] -= 0.5f * size * (p[INDEX(i + 1, j    )] - p[INDEX(i - 1, j    )]);
+			vel_y[ij] -= 0.5f * size * (p[INDEX(i,     j + 1)] - p[INDEX(i,     j - 1)]);
 		}
 	}
 
@@ -502,7 +509,7 @@ void Fluid::BoundaryConditions(const Boundary b, float* x)
 						if (count > 0)
 						{
 							// Divide sum by count
-							x[INDEX(i, j)] = sum * inv[count];
+							x[ij] = sum * inv[count];
 						}
 					}
 				}
