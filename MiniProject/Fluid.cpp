@@ -25,8 +25,8 @@ Fluid::Fluid(int size, float delta_time, float viscosity, float density_diffusio
 	room_temperature(room_temperature),
 	vorticity_confinement(vorticity_confinement_eta)
 {
-	kappa =  1.1f;
-	sigma = -2.5f;
+	kappa =  0.1f;
+	sigma = -0.2f;
 
 	// Allocate grids
 	const int mem_size = size * size;
@@ -171,6 +171,7 @@ void Fluid::Render(Display& display, RenderMode render_mode)
 	vec3* screen    = display.GetBuffer();
 	const int width = display.GetBufferWidth();
 
+#pragma omp parallel for
 	for (int j = 0; j < size; j++)
 	{
 		for (int i = 0; i < size; i++)
@@ -219,6 +220,7 @@ void Fluid::Render(Display& display, RenderMode render_mode)
 // Reset all quanitites in the grid to their defaults
 void Fluid::Reset()
 {
+#pragma omp parallel for
 	for (int i = 0; i < size * size; i++)
 	{
 		density[i]      = 0;
@@ -254,6 +256,7 @@ void Fluid::Advect(const BoundaryType b, float* d, const float* d0, const float*
 	const float edge         = size + 0.5f;
 	const float size_minus_1 = size - 1;
 
+#pragma omp parallel for
 	for (int j = 1; j < size - 1; j++) 
 	{
 		for (int i = 1; i < size - 1; i++) 
@@ -307,6 +310,7 @@ void Fluid::ExternalForces(float* vel_x, float* vel_y)
 {
 	const float inv_room_temp = 1.0f / room_temperature;
 	
+#pragma omp parallel for
 	for (int j = 1; j < size - 1; j++)
 	{
 		for (int i = 1; i < size - 1; i++)
@@ -332,6 +336,7 @@ void Fluid::ExternalForces(float* vel_x, float* vel_y)
 void Fluid::VorticityConfinement(float* vel_x, float* vel_y, float* curl)
 {
 	// Compute curl
+#pragma omp parallel for
 	for (int j = 1; j < size - 1; j++)
 	{
 		for (int i = 1; i < size - 1; i++)
@@ -342,6 +347,7 @@ void Fluid::VorticityConfinement(float* vel_x, float* vel_y, float* curl)
 	}
 
 	// Apply vorticity confinement based on the curl
+#pragma omp parallel for
 	for (int j = 1; j < size - 1; j++)
 	{
 		for (int i = 1; i < size - 1; i++)
@@ -370,6 +376,7 @@ void Fluid::Project(float* vel_x, float* vel_y, float* p, float* div)
 {
 	const float factor = -0.5f / size;
 
+#pragma omp parallel for
 	for (int j = 1; j < size - 1; j++)
 	{
 		for (int i = 1; i < size - 1; i++)
@@ -389,6 +396,7 @@ void Fluid::Project(float* vel_x, float* vel_y, float* p, float* div)
 	// Obtain pressure from diffusing divergence
 	GaussSeidel(OTHER, p, div, 1, 4);
 
+#pragma omp parallel for
 	for (int j = 1; j < size - 1; j++)
 	{
 		for (int i = 1; i < size - 1; i++)
@@ -412,6 +420,7 @@ void Fluid::Project(float* vel_x, float* vel_y, float* p, float* div)
 void Fluid::BoundaryConditions(const BoundaryType b, float* x)
 {
 	// Handle edge of screen boundaries
+#pragma omp parallel for
 	for (int i = 1; i < size - 1; i++)
 	{
 		// Copy if x is not velocity_y or velocity_y prev, otherwise negate
@@ -434,6 +443,7 @@ void Fluid::BoundaryConditions(const BoundaryType b, float* x)
 	const float inv[5] = { 1.0f, 1.0f, 0.5f, 0.3333333f, 0.25f };
 
 	// Handle obstacles in the grid
+#pragma omp parallel for
 	for (int j = 1; j < size - 1; j++)
 	{
 		for (int i = 1; i < size - 1; i++)
@@ -524,6 +534,7 @@ void Fluid::GaussSeidel(const BoundaryType b, float* x, const float* x0, const f
 
 	for (int k = 0; k < ITERATIONS; k++)
 	{
+#pragma omp parallel for
 		for (int j = 1; j < size - 1; j++) 
 		{
 			for (int i = 1; i < size - 1; i++) 
