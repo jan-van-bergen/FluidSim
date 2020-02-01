@@ -1,6 +1,6 @@
 # Fluid Simulation Sandbox
 
-2D semi-lagrangian fluid solver based on ["Stable Fluids" solver by Jos Stam](http://www.dgp.toronto.edu/people/stam/reality/Research/pdf/GDC03.pdf "Real-Time Fluid Dynamics for Games").
+2D semi-Lagrangian fluid solver based on ["Stable Fluids" solver by Jos Stam](http://www.dgp.toronto.edu/people/stam/reality/Research/pdf/GDC03.pdf "Real-Time Fluid Dynamics for Games").
 
 Users can interact in real-time with the fluid, using various controls.
 We also provide various render modes to provide users a better understanding of what is going on within the simulation.
